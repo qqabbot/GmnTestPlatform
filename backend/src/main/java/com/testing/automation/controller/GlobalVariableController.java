@@ -1,0 +1,34 @@
+package com.testing.automation.controller;
+
+import com.testing.automation.model.GlobalVariable;
+import com.testing.automation.service.GlobalVariableService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/variables")
+@CrossOrigin(origins = "*")
+public class GlobalVariableController {
+
+    @Autowired
+    private GlobalVariableService globalVariableService;
+
+    @GetMapping("/environment/{envId}")
+    public ResponseEntity<List<GlobalVariable>> getVariablesByEnvironment(@PathVariable Long envId) {
+        return ResponseEntity.ok(globalVariableService.getVariablesByEnvironmentId(envId));
+    }
+
+    @PostMapping
+    public ResponseEntity<GlobalVariable> createVariable(@RequestBody GlobalVariable variable) {
+        return ResponseEntity.ok(globalVariableService.createVariable(variable));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteVariable(@PathVariable Long id) {
+        globalVariableService.deleteVariable(id);
+        return ResponseEntity.ok().build();
+    }
+}

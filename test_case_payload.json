@@ -1,0 +1,48 @@
+{
+    "caseName": "用户完整流程测试",
+    "method": "POST",
+    "url": "${base_url}/post",
+    "body": "{}",
+    "assertionScript": "status_code == 200",
+    "module": {
+        "id": 4
+    },
+    "steps": [
+        {
+            "stepName": "Step 1: 用户注册",
+            "stepOrder": 1,
+            "method": "POST",
+            "url": "${base_url}/post",
+            "headers": "{\"Content-Type\": \"application/json\"}",
+            "body": "{\"username\": \"${test_username}\", \"password\": \"123456\", \"email\": \"demo@example.com\"}",
+            "assertionScript": "status_code == 200"
+        },
+        {
+            "stepName": "Step 2: 用户登录（提取token）",
+            "stepOrder": 2,
+            "method": "POST",
+            "url": "${base_url}/post",
+            "headers": "{\"Content-Type\": \"application/json\"}",
+            "body": "{\"username\": \"${test_username}\", \"password\": \"123456\", \"token\": \"mock_token_12345\"}",
+            "assertionScript": "status_code == 200"
+        },
+        {
+            "stepName": "Step 3: 获取用户信息（使用token）",
+            "stepOrder": 3,
+            "method": "GET",
+            "url": "${base_url}/get?user=${test_username}",
+            "headers": "{\"Authorization\": \"Bearer ${auth_token}\"}",
+            "body": "",
+            "assertionScript": "status_code == 200"
+        },
+        {
+            "stepName": "Step 4: 更新用户信息",
+            "stepOrder": 4,
+            "method": "PUT",
+            "url": "${base_url}/put",
+            "headers": "{\"Authorization\": \"Bearer ${auth_token}\", \"Content-Type\": \"application/json\"}",
+            "body": "{\"username\": \"${test_username}\", \"email\": \"updated@example.com\", \"phone\": \"13800138000\"}",
+            "assertionScript": "status_code == 200"
+        }
+    ]
+}

@@ -1,0 +1,45 @@
+-- 文件名: schema.sql
+
+-- 1. 模块表 (test_module)
+CREATE TABLE test_module (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    module_name VARCHAR(255) NOT NULL UNIQUE COMMENT '模块名称',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT '测试模块表';
+
+-- 2. 用例表 (test_case)
+CREATE TABLE test_case (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    module_id BIGINT NOT NULL COMMENT '所属模块ID',
+    case_name VARCHAR(255) NOT NULL COMMENT '用例名称',
+
+    -- 接口配置
+    method VARCHAR(10) NOT NULL COMMENT 'HTTP方法 (GET/POST/PUT/DELETE)',
+    url VARCHAR(512) NOTINT NULL COMMENT '接口URL，包含变量占位符',
+    body TEXT COMMENT '请求体 (JSON)',
+
+    -- 自动化配置
+    precondition VARCHAR(1024) COMMENT '前置用例ID列表，逗号分隔 (例如: 101,102)',
+    setup_script TEXT COMMENT '预设条件/变量提取 Groovy/JEXL 脚本',
+    assertion_script TEXT NOT NULL COMMENT '断言 Groovy/JEXL 脚本',
+
+    is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (module_id) REFERENCES test_module(id) ON DELETE CASCADE
+) COMMENT '接口测试用例表';
+
+-- 3. 全局配置/环境表 (environment_config)
+CREATE TABLE environment_config (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    env_key VARCHAR(50) NOT NULL UNIQUE COMMENT '环境键 (dev/staging/prod)',
+    base_url VARCHAR(255) NOT NULL COMMENT '基础URL',
+    global_variables TEXT COMMENT '全局变量的JSON字符串'
+) COMMENT '环境配置和全局变量表';
+
+-- 插入一些初始环境数据
+INSERT INTO environment_config (env_key, base_url, global_variables) VALUES
+('dev', 'http://dev.api.com', '{"auth_token": "initial_dev_token"}'),
+('staging', 'http://staging.api.com', '{"auth_token": "initial_staging_token"}');

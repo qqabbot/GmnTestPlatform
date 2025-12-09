@@ -1,0 +1,1 @@
+import{r as t}from"./request-c7ccb34d.js";const o={getAll(){return t.get("/projects")},create(e){return t.post("/projects",e)},getById(e){return t.get(`/projects/${e}`)},update(e,r){return t.put(`/projects/${e}`,r)},delete(e){return t.delete(`/projects/${e}`)}};export{o as p};
