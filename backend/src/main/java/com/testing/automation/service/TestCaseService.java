@@ -371,7 +371,9 @@ public class TestCaseService {
         while (matcher.find()) {
             String varName = matcher.group(1);
             Object value = variables.get(varName);
-            matcher.appendReplacement(sb, value != null ? value.toString() : "");
+            // If variable not found, preserve original placeholder instead of empty string
+            String replacement = value != null ? Matcher.quoteReplacement(value.toString()) : "\\${" + varName + "}";
+            matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
         return sb.toString();
