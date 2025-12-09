@@ -3,7 +3,13 @@ spring:
     url: jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: insp_dev
     password: insp_dev@123
-    driver-class-name: com.mysql.jdbc.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 600000
+      max-lifetime: 1800000
   jmx:
     enabled: false
   application:
@@ -23,13 +29,14 @@ mybatis:
 
 logging:
   level:
-    com.testing.automation.mapper: INFO # 添加这行来查看SQL语句
+    com.testing.automation.mapper: INFO
     root: INFO
     com.testing.automation: DEBUG
-    com.zaxxer.hikari: INFO
+    com.zaxxer.hikari: DEBUG
+    com.zaxxer.hikari.HikariConfig: DEBUG
+    com.zaxxer.hikari.pool: DEBUG
+    com.mysql: DEBUG
     org.springframework.jdbc: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 server:
   port: 7777
