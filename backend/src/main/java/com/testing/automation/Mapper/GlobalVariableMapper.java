@@ -19,14 +19,15 @@ public interface GlobalVariableMapper {
         @Select("SELECT * FROM global_variable WHERE environment_id = #{envId}")
         List<GlobalVariable> findByEnvironmentId(Long envId);
 
-        @Insert("INSERT INTO global_variable (var_key, var_value, scope, project_id, module_id, created_at, updated_at) "
+        @Insert("INSERT INTO global_variable (key_name, value_content, type, description, environment_id, project_id, module_id, created_at, updated_at) "
                         +
-                        "VALUES (#{varKey}, #{varValue}, #{scope}, #{projectId}, #{moduleId}, #{createdAt}, #{updatedAt})")
+                        "VALUES (#{keyName}, #{valueContent}, #{type}, #{description}, #{environmentId}, #{projectId}, #{moduleId}, #{createdAt}, #{updatedAt})")
         @Options(useGeneratedKeys = true, keyProperty = "id")
         int insert(GlobalVariable variable);
 
-        @Update("UPDATE global_variable SET var_key = #{varKey}, var_value = #{varValue}, " +
-                        "scope = #{scope}, project_id = #{projectId}, module_id = #{moduleId}, " +
+        @Update("UPDATE global_variable SET key_name = #{keyName}, value_content = #{valueContent}, " +
+                        "type = #{type}, description = #{description}, environment_id = #{environmentId}, project_id = #{projectId}, module_id = #{moduleId}, "
+                        +
                         "updated_at = #{updatedAt} WHERE id = #{id}")
         int update(GlobalVariable variable);
 
