@@ -256,11 +256,13 @@ public class TestCaseService {
                     finalMessage = "Step Failed: " + step.getStepName();
                     finalDetail = e.getMessage();
 
-                    // Log failure
+                    // Log failure with proper error details
                     TestExecutionLog log = new TestExecutionLog();
                     log.setStepName(step.getStepName());
                     log.setRequestUrl(stepUrl);
-                    log.setResponseBody("Error: " + e.getMessage());
+                    log.setRequestBody(stepBody);
+                    log.setResponseStatus(0); // 0 indicates network/execution error
+                    log.setResponseBody(e.getMessage()); // Clean error message without prefix
                     log.setCreatedAt(LocalDateTime.now());
                     logs.add(log);
                     break; // Stop on failure?
