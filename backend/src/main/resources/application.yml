@@ -3,13 +3,7 @@ spring:
     url: jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: insp_dev
     password: insp_dev@123
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      connection-timeout: 30000
-      maximum-pool-size: 10
-      minimum-idle: 2
-      idle-timeout: 600000
-      max-lifetime: 1800000
+    driver-class-name: com.mysql.jdbc.Driver
   jmx:
     enabled: false
   application:
