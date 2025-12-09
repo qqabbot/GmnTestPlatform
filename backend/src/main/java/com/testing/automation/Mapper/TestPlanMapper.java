@@ -9,6 +9,7 @@ public interface TestPlanMapper {
 
         @Select("SELECT * FROM test_plan ORDER BY id DESC")
         @Results({
+                        @Result(property = "id", column = "id"),
                         @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.mapper.ProjectMapper.findById")),
                         @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.mapper.TestPlanMapper.findCasesByPlanId"))
         })
@@ -16,6 +17,7 @@ public interface TestPlanMapper {
 
         @Select("SELECT * FROM test_plan WHERE id = #{id}")
         @Results({
+                        @Result(property = "id", column = "id"),
                         @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.mapper.ProjectMapper.findById")),
                         @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.mapper.TestPlanMapper.findCasesByPlanId"))
         })
@@ -23,6 +25,7 @@ public interface TestPlanMapper {
 
         @Select("SELECT * FROM test_plan WHERE project_id = #{projectId} ORDER BY id DESC")
         @Results({
+                        @Result(property = "id", column = "id"),
                         @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.mapper.ProjectMapper.findById")),
                         @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.mapper.TestPlanMapper.findCasesByPlanId"))
         })
@@ -46,8 +49,7 @@ public interface TestPlanMapper {
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
         List<com.testing.automation.model.TestCase> findCasesByPlanId(Long planId);
 
-        @Select("SELECT tc.* FROM test_case tc " +
-                        "INNER JOIN test_plan_cases tpc ON tc.id = tpc.case_id " +
+        @Select("SELECT tpc.case_id FROM test_plan_cases tpc " +
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
         List<Long> findCaseIdsByPlanId(Long planId);
 

@@ -16,7 +16,11 @@
 
     <!-- Plan Table -->
     <el-table :data="plans" style="width: 100%" v-loading="loading">
-      <el-table-column prop="id" label="ID" width="80" />
+      <el-table-column label="ID" width="80">
+        <template #default="scope">
+          {{ scope.row.id }}
+        </template>
+      </el-table-column>
       <el-table-column prop="name" label="Plan Name" min-width="200" />
       <el-table-column prop="project.projectName" label="Project" width="150" />
       <el-table-column label="Cases" width="100">
