@@ -1,1 +1,0 @@
-import{r as t}from"./request-c7ccb34d.js";const o={getAll(){return t.get("/environments")},create(e){return t.post("/environments",e)},getById(e){return t.get(`/environments/${e}`)},update(e,n){return t.put(`/environments/${e}`,n)},delete(e){return t.delete(`/environments/${e}`)}};export{o as e};

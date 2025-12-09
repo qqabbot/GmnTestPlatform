@@ -39,6 +39,7 @@ build/
 
 ### Node ###
 node_modules/
+dist/
 
 ### Backend Generated ###
 testdb.db

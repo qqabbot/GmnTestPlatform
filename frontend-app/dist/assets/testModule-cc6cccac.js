@@ -1,1 +1,0 @@
-import{r as t}from"./request-c7ccb34d.js";const o={getAll(){return t.get("/modules")},create(e){return t.post("/modules",e)},getById(e){return t.get(`/modules/${e}`)},delete(e){return t.delete(`/modules/${e}`)}};export{o as t};
