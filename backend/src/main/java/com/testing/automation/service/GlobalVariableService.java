@@ -20,6 +20,17 @@ public class GlobalVariableService {
     }
 
     public GlobalVariable createVariable(GlobalVariable variable) {
+        // Extract IDs from nested objects if present
+        if (variable.getEnvironment() != null && variable.getEnvironment().getId() != null) {
+            variable.setEnvironmentId(variable.getEnvironment().getId());
+        }
+        if (variable.getProject() != null && variable.getProject().getId() != null) {
+            variable.setProjectId(variable.getProject().getId());
+        }
+        if (variable.getModule() != null && variable.getModule().getId() != null) {
+            variable.setModuleId(variable.getModule().getId());
+        }
+        
         variable.setCreatedAt(LocalDateTime.now());
         variable.setUpdatedAt(LocalDateTime.now());
         variableMapper.insert(variable);
@@ -41,6 +52,18 @@ public class GlobalVariableService {
             var.setValueContent(varDetails.getValueContent());
             var.setType(varDetails.getType());
             var.setDescription(varDetails.getDescription());
+            
+            // Extract IDs from nested objects if present
+            if (varDetails.getEnvironment() != null && varDetails.getEnvironment().getId() != null) {
+                var.setEnvironmentId(varDetails.getEnvironment().getId());
+            }
+            if (varDetails.getProject() != null && varDetails.getProject().getId() != null) {
+                var.setProjectId(varDetails.getProject().getId());
+            }
+            if (varDetails.getModule() != null && varDetails.getModule().getId() != null) {
+                var.setModuleId(varDetails.getModule().getId());
+            }
+            
             var.setUpdatedAt(LocalDateTime.now());
             variableMapper.update(var);
         }
