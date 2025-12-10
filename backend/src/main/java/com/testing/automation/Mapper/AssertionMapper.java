@@ -10,16 +10,19 @@ public interface AssertionMapper {
     @Select("SELECT * FROM assertion WHERE test_case_id = #{testCaseId}")
     List<Assertion> findByTestCaseId(Long testCaseId);
 
+    @Select("SELECT * FROM assertion WHERE step_id = #{stepId}")
+    List<Assertion> findByStepId(Long stepId);
+
     @Select("SELECT * FROM assertion WHERE id = #{id}")
     Assertion findById(Long id);
 
-    @Insert("INSERT INTO assertion (test_case_id, assertion_type, expected_value, actual_expression, created_at) " +
-            "VALUES (#{testCaseId}, #{assertionType}, #{expectedValue}, #{actualExpression}, #{createdAt})")
+    @Insert("INSERT INTO assertion (step_id, type, expression, expected_value, created_at) " +
+            "VALUES (#{stepId}, #{type}, #{expression}, #{expectedValue}, #{createdAt})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Assertion assertion);
 
-    @Update("UPDATE assertion SET test_case_id = #{testCaseId}, assertion_type = #{assertionType}, " +
-            "expected_value = #{expectedValue}, actual_expression = #{actualExpression} WHERE id = #{id}")
+    @Update("UPDATE assertion SET step_id = #{stepId}, type = #{type}, " +
+            "expression = #{expression}, expected_value = #{expectedValue} WHERE id = #{id}")
     int update(Assertion assertion);
 
     @Delete("DELETE FROM assertion WHERE id = #{id}")

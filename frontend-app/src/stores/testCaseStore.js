@@ -83,7 +83,9 @@ export const useTestCaseStore = defineStore('testCase', () => {
                     headers: step.headers || '{}',
                     body: step.body || '',
                     assertionScript: step.assertionScript || '',
-                    enabled: step.enabled !== false
+                    enabled: step.enabled !== false,
+                    extractors: step.extractors || step._ui_extractors || [],
+                    assertions: step.assertions || step._ui_assertions || []
                 }))
             }
 

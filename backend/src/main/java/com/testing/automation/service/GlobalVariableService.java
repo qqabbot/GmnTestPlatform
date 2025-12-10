@@ -71,25 +71,62 @@ public class GlobalVariableService {
         List<GlobalVariable> variables = variableMapper.findAll();
         Map<String, Object> map = new HashMap<>();
 
-        // Order: Global -> Project -> Module -> Environment
-        for (GlobalVariable var : variables) {
-            boolean include = false;
-
-            if (var.getProjectId() == null && var.getModuleId() == null && var.getEnvironmentId() == null) {
-                include = true; // Global variable
-            } else if (projectId != null && var.getProjectId() != null && var.getProjectId().equals(projectId)) {
-                include = true; // Project-level
-            } else if (moduleId != null && var.getModuleId() != null && var.getModuleId().equals(moduleId)) {
-                include = true; // Module-level
-            } else if (envKey != null && var.getEnvironment() != null
-                    && envKey.equals(var.getEnvironment().getEnvName())) {
-                include = true; // Environment-level
+        // Try to parse envKey as ID
+        Long envId = null;
+        try {
+            if (envKey != null) {
+                envId = Long.parseLong(envKey);
             }
+        } catch (NumberFormatException e) {
+            // envKey is likely a name, ignore
+        }
 
-            if (include) {
+        // Order: Global -> Project -> Module -> Environment
+        // Process in priority order to ensure correct override behavior
+        
+        // 1. Global variables (no project, module, or environment)
+        for (GlobalVariable var : variables) {
+            if (var.getProjectId() == null && var.getModuleId() == null && var.getEnvironmentId() == null) {
                 map.put(var.getKeyName(), var.getValueContent());
             }
         }
+        
+        // 2. Project variables (override Global)
+        if (projectId != null) {
+            for (GlobalVariable var : variables) {
+                if (var.getProjectId() != null && var.getProjectId().equals(projectId) 
+                    && var.getModuleId() == null && var.getEnvironmentId() == null) {
+                    map.put(var.getKeyName(), var.getValueContent());
+                }
+            }
+        }
+        
+        // 3. Module variables (override Project)
+        if (moduleId != null) {
+            for (GlobalVariable var : variables) {
+                if (var.getModuleId() != null && var.getModuleId().equals(moduleId) 
+                    && var.getEnvironmentId() == null) {
+                    map.put(var.getKeyName(), var.getValueContent());
+                }
+            }
+        }
+        
+        // 4. Environment variables (override all)
+        for (GlobalVariable var : variables) {
+            if (var.getEnvironmentId() != null) {
+                boolean match = false;
+                if (envId != null && envId.equals(var.getEnvironmentId())) {
+                    match = true;
+                } else if (envKey != null && var.getEnvironment() != null
+                        && envKey.equalsIgnoreCase(var.getEnvironment().getEnvName())) {
+                    match = true;
+                }
+                if (match) {
+                    map.put(var.getKeyName(), var.getValueContent());
+                }
+            }
+        }
+        
         return map;
     }
 }

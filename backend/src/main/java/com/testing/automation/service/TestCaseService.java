@@ -36,6 +36,8 @@ public class TestCaseService {
     private final TestStepMapper stepMapper;
     private final TestExecutionRecordMapper executionRecordMapper;
     private final TestExecutionLogMapper executionLogMapper;
+    private final ExtractorMapper extractorMapper;
+    private final AssertionMapper assertionMapper;
     private final GlobalVariableService globalVariableService;
     private final WebClient webClient;
     private final Retry retry;
@@ -48,6 +50,7 @@ public class TestCaseService {
     @Autowired
     public TestCaseService(TestCaseMapper caseMapper, TestModuleMapper moduleMapper, TestStepMapper stepMapper,
             TestExecutionRecordMapper executionRecordMapper, TestExecutionLogMapper executionLogMapper,
+            ExtractorMapper extractorMapper, AssertionMapper assertionMapper,
             GlobalVariableService globalVariableService, WebClient.Builder webClientBuilder,
             CircuitBreakerRegistry circuitBreakerRegistry) {
         this.caseMapper = caseMapper;
@@ -55,6 +58,8 @@ public class TestCaseService {
         this.stepMapper = stepMapper;
         this.executionRecordMapper = executionRecordMapper;
         this.executionLogMapper = executionLogMapper;
+        this.extractorMapper = extractorMapper;
+        this.assertionMapper = assertionMapper;
         this.globalVariableService = globalVariableService;
         this.webClient = webClientBuilder.build();
 
@@ -91,6 +96,13 @@ public class TestCaseService {
         TestCase testCase = caseMapper.findById(id);
         if (testCase != null) {
             testCase.setSteps(stepMapper.findByCaseId(id));
+            // Load extractors and assertions for each step
+            for (TestStep step : testCase.getSteps()) {
+                if (step.getId() != null) {
+                    step.setExtractors(extractorMapper.findByStepId(step.getId()));
+                    step.setAssertions(assertionMapper.findByStepId(step.getId()));
+                }
+            }
         }
         return testCase;
     }
@@ -121,8 +133,15 @@ public class TestCaseService {
             throw new RuntimeException("Test case not found: " + caseId);
         }
 
-        Long projectId = testCase.getModuleId();
+        // Properly resolve projectId from moduleId
         Long moduleId = testCase.getModuleId();
+        Long projectId = null;
+        if (moduleId != null) {
+            TestModule module = moduleMapper.findById(moduleId);
+            if (module != null) {
+                projectId = module.getProjectId();
+            }
+        }
         Map<String, Object> runtimeVariables = globalVariableService.getVariablesMapWithInheritance(
                 projectId, moduleId, envKey);
 
@@ -155,6 +174,13 @@ public class TestCaseService {
                 }
                 // Fetch steps
                 tc.setSteps(stepMapper.findByCaseId(tc.getId()));
+                // Load extractors and assertions for each step
+                for (TestStep step : tc.getSteps()) {
+                    if (step.getId() != null) {
+                        step.setExtractors(extractorMapper.findByStepId(step.getId()));
+                        step.setAssertions(assertionMapper.findByStepId(step.getId()));
+                    }
+                }
                 casesToExecute.add(tc);
             }
         } else if (moduleId != null) {
@@ -172,6 +198,13 @@ public class TestCaseService {
         for (TestCase tc : casesToExecute) {
             if (tc.getSteps() == null || tc.getSteps().isEmpty()) {
                 tc.setSteps(stepMapper.findByCaseId(tc.getId()));
+            }
+            // Load extractors and assertions for each step
+            for (TestStep step : tc.getSteps()) {
+                if (step.getId() != null) {
+                    step.setExtractors(extractorMapper.findByStepId(step.getId()));
+                    step.setAssertions(assertionMapper.findByStepId(step.getId()));
+                }
             }
         }
 
@@ -247,9 +280,33 @@ public class TestCaseService {
                     log.setResponseBody(stepResponse.getBody());
                     log.setCreatedAt(LocalDateTime.now());
                     logs.add(log);
-                    lastResponse = stepResponse; // Update last response for ease of access? Or consolidate?
+                    lastResponse = stepResponse;
 
-                    // TODO: Step Assertions (not fully implemented yet)
+                    // Execute Extractors to extract variables from response
+                    if (step.getExtractors() != null && !step.getExtractors().isEmpty()) {
+                        for (Extractor extractor : step.getExtractors()) {
+                            try {
+                                Object extractedValue = executeExtractor(extractor, stepResponse);
+                                if (extractedValue != null) {
+                                    runtimeVariables.put(extractor.getVariableName(), extractedValue);
+                                }
+                            } catch (Exception e) {
+                                // Log error but continue execution
+                                System.err.println("Extractor failed for " + extractor.getVariableName() + ": " + e.getMessage());
+                            }
+                        }
+                    }
+
+                    // Execute Step Assertions
+                    if (step.getAssertionScript() != null && !step.getAssertionScript().isEmpty()) {
+                        boolean stepAssertionPassed = executeAssertions(step.getAssertionScript(), stepResponse, runtimeVariables);
+                        if (!stepAssertionPassed) {
+                            allStepsPassed = false;
+                            finalMessage = "Step Assertion Failed: " + step.getStepName();
+                            finalDetail = "Step assertion failed. Script: " + step.getAssertionScript();
+                            break; // Stop execution on step assertion failure
+                        }
+                    }
 
                 } catch (Exception e) {
                     allStepsPassed = false;
@@ -353,26 +410,62 @@ public class TestCaseService {
 
     private void executeScript(String script, Map<String, Object> variables) {
         try {
+            ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
+            
+            // Provide helper functions
+            engine.put("vars", variables);
+            engine.eval("def jsonPath(response, path) { " +
+                    "try { " +
+                    "  return com.jayway.jsonpath.JsonPath.read(response.getBody() ?: '{}', path); " +
+                    "} catch (Exception e) { " +
+                    "  return null; " +
+                    "}" +
+                    "}");
+            
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                groovyEngine.put(entry.getKey(), entry.getValue());
+                engine.put(entry.getKey(), entry.getValue());
             }
-            groovyEngine.eval(script);
+            engine.eval(script);
+            
+            // Update variables if modified in script
+            variables.putAll((Map<String, Object>) engine.get("vars"));
         } catch (Exception e) {
-            // Log error
+            System.err.println("Script execution failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private String replaceVariables(String text, Map<String, Object> variables) {
         if (text == null)
             return null;
-        Pattern pattern = Pattern.compile("\\$\\{(\\w+)\\}");
+        
+        // Pattern to match ${...} expressions
+        // Supports both simple variables ${varName} and SpEL expressions ${T(System).currentTimeMillis()}
+        Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(text);
         StringBuffer sb = new StringBuffer();
+        
         while (matcher.find()) {
-            String varName = matcher.group(1);
-            Object value = variables.get(varName);
-            // If variable not found, preserve original placeholder instead of empty string
-            String replacement = value != null ? Matcher.quoteReplacement(value.toString()) : "\\${" + varName + "}";
+            String expression = matcher.group(1);
+            String replacement;
+            
+            // Check if it's a SpEL expression (contains method calls, dots, parentheses)
+            if (expression.contains("(") || expression.contains(".") || expression.startsWith("T(")) {
+                try {
+                    // Evaluate SpEL expression
+                    Object result = spelParser.parseExpression(expression).getValue(spelContext);
+                    replacement = result != null ? Matcher.quoteReplacement(result.toString()) : "\\${" + expression + "}";
+                } catch (Exception e) {
+                    // If SpEL evaluation fails, try as simple variable
+                    Object value = variables.get(expression);
+                    replacement = value != null ? Matcher.quoteReplacement(value.toString()) : "\\${" + expression + "}";
+                }
+            } else {
+                // Simple variable replacement
+                Object value = variables.get(expression);
+                replacement = value != null ? Matcher.quoteReplacement(value.toString()) : "\\${" + expression + "}";
+            }
+            
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
@@ -381,40 +474,122 @@ public class TestCaseService {
 
     private TestResponse executeHttpRequest(String method, String url, String body, String headers) {
         try {
-            WebClient.RequestBodySpec request = webClient.method(org.springframework.http.HttpMethod.valueOf(method))
-                    .uri(url);
+            // Apply Resilience4j decorators
+            return Retry.decorateSupplier(retry, () ->
+                CircuitBreaker.decorateSupplier(circuitBreaker, () -> {
+                    WebClient.RequestBodySpec request = webClient.method(org.springframework.http.HttpMethod.valueOf(method))
+                            .uri(url);
 
-            if (body != null && !body.isEmpty()) {
-                request.bodyValue(body);
-            }
+                    // Parse and apply headers
+                    if (headers != null && !headers.trim().isEmpty()) {
+                        try {
+                            Map<String, String> headerMap = objectMapper.readValue(headers, 
+                                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+                            for (Map.Entry<String, String> entry : headerMap.entrySet()) {
+                                request.header(entry.getKey(), entry.getValue());
+                            }
+                        } catch (Exception e) {
+                            // If JSON parsing fails, try as simple key-value pairs
+                            System.err.println("Failed to parse headers as JSON: " + e.getMessage());
+                        }
+                    }
 
-            Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
-                    .toEntity(String.class);
-            org.springframework.http.ResponseEntity<String> response = responseMono.block();
+                    if (body != null && !body.isEmpty()) {
+                        request.bodyValue(body);
+                    }
 
-            return TestResponse.builder()
-                    .statusCode(response.getStatusCodeValue())
-                    .body(response.getBody())
-                    .headers(response.getHeaders().toSingleValueMap())
-                    .build();
+                    Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
+                            .toEntity(String.class);
+                    org.springframework.http.ResponseEntity<String> response = responseMono.block();
+
+                    return TestResponse.builder()
+                            .statusCode(response.getStatusCode().value()) // Use non-deprecated API
+                            .body(response.getBody())
+                            .headers(response.getHeaders().toSingleValueMap())
+                            .build();
+                })
+            ).get();
         } catch (Exception e) {
             throw new RuntimeException("HTTP Request failed: " + e.getMessage(), e);
         }
     }
 
+    /**
+     * Execute extractor to extract value from response
+     */
+    private Object executeExtractor(Extractor extractor, TestResponse response) {
+        try {
+            String type = extractor.getType() != null ? extractor.getType().toUpperCase() : "JSONPATH";
+            String expression = extractor.getExpression();
+            
+            switch (type) {
+                case "JSONPATH":
+                    if (response.getBody() != null) {
+                        return JsonPath.read(response.getBody(), expression);
+                    }
+                    break;
+                case "HEADER":
+                    if (response.getHeaders() != null && response.getHeaders().containsKey(expression)) {
+                        return response.getHeaders().get(expression);
+                    }
+                    break;
+                case "REGEX":
+                    if (response.getBody() != null) {
+                        Pattern pattern = Pattern.compile(expression);
+                        Matcher matcher = pattern.matcher(response.getBody());
+                        if (matcher.find() && matcher.groupCount() > 0) {
+                            return matcher.group(1);
+                        }
+                    }
+                    break;
+                default:
+                    System.err.println("Unknown extractor type: " + type);
+            }
+        } catch (Exception e) {
+            System.err.println("Extractor execution failed: " + e.getMessage());
+            throw new RuntimeException("Extractor failed: " + e.getMessage(), e);
+        }
+        return null;
+    }
+
     private boolean executeAssertions(String script, TestResponse response, Map<String, Object> variables) {
         try {
-            groovyEngine.put("status_code", response.getStatusCode());
-            groovyEngine.put("response_body", response.getBody());
-            groovyEngine.put("response", response);
-
+            // Create a new script engine instance for each execution to avoid state pollution
+            ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
+            
+            // Provide helper functions and objects
+            engine.put("status_code", response.getStatusCode());
+            engine.put("response_body", response.getBody());
+            engine.put("response", response);
+            engine.put("headers", response.getHeaders() != null ? response.getHeaders() : new HashMap<>());
+            
+            // Provide vars object for variable manipulation
+            Map<String, Object> vars = new HashMap<>(variables);
+            engine.put("vars", vars);
+            
+            // Provide jsonPath helper function
+            engine.eval("def jsonPath(response, path) { " +
+                    "try { " +
+                    "  return com.jayway.jsonpath.JsonPath.read(response.getBody() ?: '{}', path); " +
+                    "} catch (Exception e) { " +
+                    "  return null; " +
+                    "}" +
+                    "}");
+            
+            // Add all runtime variables to script context
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                groovyEngine.put(entry.getKey(), entry.getValue());
+                engine.put(entry.getKey(), entry.getValue());
             }
 
-            Object result = groovyEngine.eval(script);
+            Object result = engine.eval(script);
+            
+            // Update variables from vars object if modified
+            variables.putAll(vars);
+            
             return result != null && (Boolean) result;
         } catch (Exception e) {
+            System.err.println("Assertion execution failed: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
     }
