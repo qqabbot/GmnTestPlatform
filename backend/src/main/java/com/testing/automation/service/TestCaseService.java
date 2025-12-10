@@ -474,41 +474,47 @@ public class TestCaseService {
 
     private TestResponse executeHttpRequest(String method, String url, String body, String headers) {
         try {
-            // Apply Resilience4j decorators
-            return Retry.decorateSupplier(retry, () ->
-                CircuitBreaker.decorateSupplier(circuitBreaker, () -> {
-                    WebClient.RequestBodySpec request = webClient.method(org.springframework.http.HttpMethod.valueOf(method))
-                            .uri(url);
+            // Create the base supplier
+            java.util.function.Supplier<TestResponse> baseSupplier = () -> {
+                WebClient.RequestBodySpec request = webClient.method(org.springframework.http.HttpMethod.valueOf(method))
+                        .uri(url);
 
-                    // Parse and apply headers
-                    if (headers != null && !headers.trim().isEmpty()) {
-                        try {
-                            Map<String, String> headerMap = objectMapper.readValue(headers, 
-                                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
-                            for (Map.Entry<String, String> entry : headerMap.entrySet()) {
-                                request.header(entry.getKey(), entry.getValue());
-                            }
-                        } catch (Exception e) {
-                            // If JSON parsing fails, try as simple key-value pairs
-                            System.err.println("Failed to parse headers as JSON: " + e.getMessage());
+                // Parse and apply headers
+                if (headers != null && !headers.trim().isEmpty()) {
+                    try {
+                        Map<String, String> headerMap = objectMapper.readValue(headers, 
+                                objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+                        for (Map.Entry<String, String> entry : headerMap.entrySet()) {
+                            request.header(entry.getKey(), entry.getValue());
                         }
+                    } catch (Exception e) {
+                        // If JSON parsing fails, try as simple key-value pairs
+                        System.err.println("Failed to parse headers as JSON: " + e.getMessage());
                     }
+                }
 
-                    if (body != null && !body.isEmpty()) {
-                        request.bodyValue(body);
-                    }
+                if (body != null && !body.isEmpty()) {
+                    request.bodyValue(body);
+                }
 
-                    Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
-                            .toEntity(String.class);
-                    org.springframework.http.ResponseEntity<String> response = responseMono.block();
+                Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
+                        .toEntity(String.class);
+                org.springframework.http.ResponseEntity<String> response = responseMono.block();
 
-                    return TestResponse.builder()
-                            .statusCode(response.getStatusCode().value()) // Use non-deprecated API
-                            .body(response.getBody())
-                            .headers(response.getHeaders().toSingleValueMap())
-                            .build();
-                })
-            ).get();
+                return TestResponse.builder()
+                        .statusCode(response.getStatusCode().value()) // Use non-deprecated API
+                        .body(response.getBody())
+                        .headers(response.getHeaders().toSingleValueMap())
+                        .build();
+            };
+            
+            // Apply Resilience4j decorators: CircuitBreaker first, then Retry
+            java.util.function.Supplier<TestResponse> circuitBreakerSupplier = 
+                CircuitBreaker.decorateSupplier(circuitBreaker, baseSupplier);
+            java.util.function.Supplier<TestResponse> retrySupplier = 
+                Retry.decorateSupplier(retry, circuitBreakerSupplier);
+            
+            return retrySupplier.get();
         } catch (Exception e) {
             throw new RuntimeException("HTTP Request failed: " + e.getMessage(), e);
         }
