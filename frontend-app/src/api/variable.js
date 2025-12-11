@@ -11,6 +11,11 @@ export const variableApi = {
         return request.post('/variables', data)
     },
 
+    // Update variable
+    update(id, data) {
+        return request.put(`/variables/${id}`, data)
+    },
+
     // Delete variable
     delete(id) {
         return request.delete(`/variables/${id}`)

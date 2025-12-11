@@ -61,12 +61,17 @@
                 </el-form-item>
                 
                 <el-form-item label="Request URL" required>
-                  <variable-input v-model="store.currentCase.url" placeholder="http://api.example.com/endpoint or ${base_url}/users">
-                    <template #prepend>
-                      <el-icon><Link /></el-icon>
-                    </template>
-                  </variable-input>
-                  <div class="help-text">Use ${variable_name} for variable substitution. Type $ to autocomplete.</div>
+                  <div style="display: flex; gap: 8px;">
+                    <variable-input v-model="store.currentCase.url" placeholder="http://api.example.com/endpoint or ${base_url}/users" style="flex: 1;">
+                      <template #prepend>
+                        <el-icon><Link /></el-icon>
+                      </template>
+                    </variable-input>
+                    <el-button @click="showCurlDialog = true" size="small" type="info">
+                      <el-icon><DocumentCopy /></el-icon> Import cURL
+                    </el-button>
+                  </div>
+                  <div class="help-text">Use ${variable_name} for variable substitution. Type $ to autocomplete. Or paste cURL command to auto-fill.</div>
                 </el-form-item>
 
                 <el-form-item label="Headers">
@@ -75,8 +80,13 @@
                 </el-form-item>
                 
                 <el-form-item label="Request Body">
-                  <monaco-editor v-model="store.currentCase.body" language="json" height="200px" />
-                  <div class="help-text">JSON request body (for POST/PUT/PATCH methods)</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <monaco-editor v-model="store.currentCase.body" language="json" height="200px" />
+                    <el-button @click="showCurlDialog = true" size="small" type="info" style="align-self: flex-start;">
+                      <el-icon><DocumentCopy /></el-icon> Import from cURL
+                    </el-button>
+                  </div>
+                  <div class="help-text">JSON request body (for POST/PUT/PATCH methods). Or paste cURL command to auto-fill.</div>
                 </el-form-item>
                 
                 <el-divider />
@@ -142,6 +152,29 @@
       <template #footer>
         <el-button @click="showExecuteDialog = false">Cancel</el-button>
         <el-button type="success" @click="executeRun" :loading="store.loading" :disabled="!executeEnv">Execute</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- cURL Import Dialog -->
+    <el-dialog v-model="showCurlDialog" title="Import from cURL" width="700px">
+      <el-form>
+        <el-form-item label="Paste cURL Command">
+          <el-input
+            v-model="curlCommand"
+            type="textarea"
+            :rows="8"
+            placeholder="curl -X POST 'https://api.example.com/users' -H 'Content-Type: application/json' -d '{\"name\":\"test\"}'"
+          />
+          <div class="help-text" style="margin-top: 8px;">
+            Paste your cURL command here. It will automatically parse method, URL, headers, and body.
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCurlDialog = false">Cancel</el-button>
+        <el-button type="primary" @click="handleImportCurl" :loading="importingCurl" :disabled="!curlCommand.trim()">
+          Import
+        </el-button>
       </template>
     </el-dialog>
 
@@ -252,6 +285,7 @@ import { projectApi } from '../api/project'
 import { testModuleApi } from '../api/testModule'
 import { environmentApi } from '../api/environment'
 import { stepTemplateApi } from '../api/stepTemplate'
+import { importApi } from '../api/import'
 import StepList from '../components/StepList.vue'
 import StepDetail from '../components/StepDetail.vue'
 import MonacoEditor from '../components/MonacoEditor.vue'
@@ -279,6 +313,11 @@ const isDryRun = ref(false)
 const showLibraryDrawer = ref(false)
 const stepTemplates = ref([])
 const templateSearch = ref('')
+
+// cURL Import State
+const showCurlDialog = ref(false)
+const curlCommand = ref('')
+const importingCurl = ref(false)
 
 const openLibrary = async () => {
     showLibraryDrawer.value = true
@@ -308,6 +347,47 @@ const importTemplate = (template) => {
     store.currentCase.steps = [...store.currentCase.steps, newStep]
     ElMessage.success('Step added from library')
     // Don't close drawer to allow multiple adds
+}
+
+const handleImportCurl = async () => {
+    if (!curlCommand.value.trim()) {
+        ElMessage.warning('Please paste a cURL command')
+        return
+    }
+    
+    if (!store.currentCase.projectId) {
+        ElMessage.warning('Please select a project first')
+        showCurlDialog.value = false
+        activeTab.value = 'settings'
+        return
+    }
+    
+    importingCurl.value = true
+    try {
+        const result = await importApi.importCurl(
+            store.currentCase.projectId,
+            store.currentCase.moduleId,
+            curlCommand.value,
+            false, // asStep = false, import as case settings
+            null
+        )
+        
+        // Update current case with parsed data
+        if (result.data) {
+            store.currentCase.method = result.data.method || store.currentCase.method
+            store.currentCase.url = result.data.url || store.currentCase.url
+            store.currentCase.headers = result.data.headers || store.currentCase.headers || '{}'
+            store.currentCase.body = result.data.body || store.currentCase.body || ''
+            
+            ElMessage.success('cURL imported successfully')
+            showCurlDialog.value = false
+            curlCommand.value = ''
+        }
+    } catch (error) {
+        ElMessage.error('Failed to import cURL: ' + (error.response?.data?.error || error.message))
+    } finally {
+        importingCurl.value = false
+    }
 }
 
 const resultTitle = computed(() => isDryRun.value ? 'Dry Run Result' : 'Execution Result')

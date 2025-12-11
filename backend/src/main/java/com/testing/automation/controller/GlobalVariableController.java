@@ -26,6 +26,12 @@ public class GlobalVariableController {
         return ResponseEntity.ok(globalVariableService.createVariable(variable));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<GlobalVariable> updateVariable(@PathVariable Long id, @RequestBody GlobalVariable variable) {
+        GlobalVariable updated = globalVariableService.updateVariable(id, variable);
+        return ResponseEntity.ok(updated);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVariable(@PathVariable Long id) {
         globalVariableService.deleteVariable(id);

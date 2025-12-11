@@ -24,6 +24,9 @@ public class TestStep {
     private String authValue;
     private String assertionScript;
     private Boolean enabled = true;
+    private Long referenceCaseId; // Reference to another test case
+    @JsonIgnoreProperties({ "steps", "module" })
+    private TestCase referenceCase; // For Jackson only
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
     private List<Extractor> extractors = new ArrayList<>();

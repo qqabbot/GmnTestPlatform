@@ -262,14 +262,55 @@ public class TestCaseService {
                 if (!Boolean.TRUE.equals(step.getEnabled()))
                     continue;
 
-                // Resolve Step Variables
-                String stepUrl = replaceVariables(step.getUrl(), runtimeVariables);
-                String stepBody = replaceVariables(step.getBody(), runtimeVariables);
-
                 long stepStart = System.currentTimeMillis();
+                TestResponse stepResponse = null;
+                String stepUrl = null;
+                String stepBody = null;
+                
                 try {
-                    TestResponse stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
-                            step.getHeaders());
+                    // Check if step references another test case
+                    if (step.getReferenceCaseId() != null) {
+                        // Execute referenced test case
+                        TestCase referencedCase = caseMapper.findById(step.getReferenceCaseId());
+                        if (referencedCase == null) {
+                            throw new RuntimeException("Referenced test case not found: " + step.getReferenceCaseId());
+                        }
+                        
+                        // Load steps for referenced case
+                        referencedCase.setSteps(stepMapper.findByCaseId(referencedCase.getId()));
+                        // Load extractors and assertions
+                        for (TestStep refStep : referencedCase.getSteps()) {
+                            if (refStep.getId() != null) {
+                                refStep.setExtractors(extractorMapper.findByStepId(refStep.getId()));
+                                refStep.setAssertions(assertionMapper.findByStepId(refStep.getId()));
+                            }
+                        }
+                        
+                        // Execute referenced case (recursive, but with depth limit to prevent infinite loops)
+                        TestResult referencedResult = executeSingleCaseLogic(referencedCase, runtimeVariables, executionHistory);
+                        
+                        // Use the last response from referenced case
+                        Integer statusCode = referencedResult.getStatusCode();
+                        if (statusCode != null && statusCode > 0) {
+                            stepResponse = TestResponse.builder()
+                                    .statusCode(statusCode)
+                                    .body(referencedResult.getResponseBody())
+                                    .headers(new HashMap<>())
+                                    .build();
+                            stepUrl = "Referenced Case: " + referencedCase.getCaseName() + " (ID: " + step.getReferenceCaseId() + ")";
+                            stepBody = "Executed referenced test case";
+                        } else {
+                            throw new RuntimeException("Referenced case execution failed: " + referencedResult.getMessage());
+                        }
+                    } else {
+                        // Normal step execution
+                        // Resolve Step Variables
+                        stepUrl = replaceVariables(step.getUrl(), runtimeVariables);
+                        stepBody = replaceVariables(step.getBody(), runtimeVariables);
+
+                        stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
+                                step.getHeaders());
+                    }
 
                     // Step Log
                     TestExecutionLog log = new TestExecutionLog();

@@ -8,7 +8,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <version>3.2.3</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
@@ -47,11 +47,11 @@
         </dependency>
 
         <!-- MySQL 驱动 (5.1.x for MySQL 5.7 compatibility) -->
+        <!-- MySQL 驱动 (Managed by Spring Boot Parent) -->
         <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>5.1.49</version>
-            <scope>runtime</scope>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>  
+            <version>8.2.0</version>
         </dependency>
 
         <!-- Apache HttpClient (用于实际发起接口请求 - Legacy, keeping for now) -->

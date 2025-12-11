@@ -19,16 +19,40 @@ public class ImportController {
     public ResponseEntity<Map<String, Object>> importSwagger(
             @RequestParam Long projectId,
             @RequestParam(required = false) String url,
+            @RequestParam(required = false, defaultValue = "false") boolean clearData,
             @RequestBody(required = false) String content) {
 
         int count;
         if (url != null && !url.isEmpty()) {
-            count = importService.importSwagger(projectId, url, true);
+            count = importService.importSwagger(projectId, url, true, clearData);
         } else if (content != null && !content.isEmpty()) {
-            count = importService.importSwagger(projectId, content, false);
+            count = importService.importSwagger(projectId, content, false, clearData);
         } else {
             return ResponseEntity.badRequest().body(Map.of("error", "URL or Content is required"));
         }
         return ResponseEntity.ok(Map.of("message", "Imported " + count + " paths", "count", count));
+    }
+
+    @PostMapping("/curl")
+    public ResponseEntity<Map<String, Object>> importCurl(
+            @RequestParam Long projectId,
+            @RequestParam(required = false) Long moduleId,
+            @RequestParam(required = false, defaultValue = "false") boolean asStep,
+            @RequestParam(required = false) Long caseId,
+            @RequestBody String curlCommand) {
+
+        try {
+            Object result = importService.importFromCurl(projectId, moduleId, curlCommand, asStep, caseId);
+            String type = asStep ? "step" : "case";
+            return ResponseEntity.ok(Map.of(
+                "message", "Successfully imported " + type + " from cURL",
+                "type", type,
+                "data", result
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Failed to import from cURL: " + e.getMessage()
+            ));
+        }
     }
 }

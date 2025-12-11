@@ -7,15 +7,18 @@
           <template #header>
             <div class="card-header">
               <span>Environments</span>
-              <el-button type="primary" size="small" @click="showEnvDialog = true">
+              <el-button type="primary" size="small" @click="showEnvDialog = true; editEnv = { id: null, envName: '', domain: '', description: '' }">
                 <el-icon><Plus /></el-icon>
               </el-button>
             </div>
           </template>
           <el-table :data="environments" highlight-current-row @current-change="handleEnvSelect" style="width: 100%" v-loading="loading">
             <el-table-column prop="envName" label="Name" />
-            <el-table-column label="Actions" width="100" align="right">
+            <el-table-column label="Actions" width="150" align="right">
               <template #default="{ row }">
+                <el-button type="primary" size="small" circle text @click.stop="openEditEnvDialog(row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
                 <el-button type="danger" size="small" circle text @click.stop="deleteEnvironment(row.id)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
@@ -40,8 +43,11 @@
           <el-table :data="variables" style="width: 100%" v-loading="varLoading">
             <el-table-column prop="keyName" label="Key" width="180" />
             <el-table-column prop="valueContent" label="Value" />
-            <el-table-column label="Actions" width="80" align="right">
+            <el-table-column label="Actions" width="120" align="right">
               <template #default="{ row }">
+                <el-button type="primary" size="small" circle text @click="openEditVarDialog(row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
                 <el-button type="danger" size="small" circle text @click="deleteVariable(row.id)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
@@ -54,21 +60,21 @@
     </el-row>
 
     <!-- Environment Dialog -->
-    <el-dialog v-model="showEnvDialog" title="New Environment" width="400px" @close="resetEnvForm">
-      <el-form :model="newEnv" label-width="80px">
+    <el-dialog v-model="showEnvDialog" :title="editEnv.id ? 'Edit Environment' : 'New Environment'" width="400px" @close="resetEnvForm">
+      <el-form :model="editEnv.id ? editEnv : newEnv" label-width="80px">
         <el-form-item label="Name" required>
-          <el-input v-model="newEnv.envName" placeholder="e.g., QA, Prod" />
+          <el-input v-model="editEnv.id ? editEnv.envName : newEnv.envName" placeholder="e.g., QA, Prod" />
         </el-form-item>
         <el-form-item label="Domain">
-          <el-input v-model="newEnv.domain" placeholder="e.g., http://api.example.com" />
+          <el-input v-model="editEnv.id ? editEnv.domain : newEnv.domain" placeholder="e.g., http://api.example.com" />
         </el-form-item>
         <el-form-item label="Desc">
-          <el-input v-model="newEnv.description" type="textarea" />
+          <el-input v-model="editEnv.id ? editEnv.description : newEnv.description" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEnvDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="saveEnvironment">Save</el-button>
+        <el-button type="primary" @click="editEnv.id ? updateEnvironment() : saveEnvironment()">Save</el-button>
       </template>
     </el-dialog>
 
@@ -85,6 +91,22 @@
       <template #footer>
         <el-button @click="showVarDialog = false">Cancel</el-button>
         <el-button type="primary" @click="saveVariable">Save</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Edit Variable Dialog -->
+    <el-dialog v-model="showEditVarDialog" title="Edit Variable" width="400px" @close="resetEditVarForm">
+      <el-form :model="editVar" label-width="80px">
+        <el-form-item label="Key" required>
+          <el-input v-model="editVar.keyName" placeholder="e.g., base_url" />
+        </el-form-item>
+        <el-form-item label="Value" required>
+          <el-input v-model="editVar.valueContent" placeholder="Variable value" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditVarDialog = false">Cancel</el-button>
+        <el-button type="primary" @click="updateVariable">Save</el-button>
       </template>
     </el-dialog>
   </div>
@@ -104,9 +126,12 @@ const selectedEnv = ref(null)
 
 const showEnvDialog = ref(false)
 const showVarDialog = ref(false)
+const showEditVarDialog = ref(false)
 
 const newEnv = ref({ envName: '', domain: '', description: '' })
+const editEnv = ref({ id: null, envName: '', domain: '', description: '' })
 const newVar = ref({ keyName: '', valueContent: '' })
+const editVar = ref({ id: null, keyName: '', valueContent: '' })
 
 const loadEnvironments = async () => {
   loading.value = true
@@ -188,12 +213,65 @@ const deleteVariable = async (id) => {
   }
 }
 
+const openEditEnvDialog = (row) => {
+  editEnv.value = { id: row.id, envName: row.envName, domain: row.domain || '', description: row.description || '' }
+  showEnvDialog.value = true
+}
+
+const updateEnvironment = async () => {
+  if (!editEnv.value.envName) return ElMessage.warning('Name is required')
+  try {
+    await environmentApi.update(editEnv.value.id, {
+      envName: editEnv.value.envName,
+      domain: editEnv.value.domain,
+      description: editEnv.value.description
+    })
+    ElMessage.success('Environment updated')
+    showEnvDialog.value = false
+    loadEnvironments()
+    // If updated environment is selected, refresh variables
+    if (selectedEnv.value && selectedEnv.value.id === editEnv.value.id) {
+      selectedEnv.value = { ...selectedEnv.value, ...editEnv.value }
+    }
+  } catch (error) {
+    ElMessage.error('Failed to update environment')
+  }
+}
+
 const resetEnvForm = () => {
   newEnv.value = { envName: '', domain: '', description: '' }
+  editEnv.value = { id: null, envName: '', domain: '', description: '' }
 }
 
 const resetVarForm = () => {
   newVar.value = { keyName: '', valueContent: '' }
+}
+
+const openEditVarDialog = (row) => {
+  editVar.value = { id: row.id, keyName: row.keyName, valueContent: row.valueContent }
+  showEditVarDialog.value = true
+}
+
+const resetEditVarForm = () => {
+  editVar.value = { id: null, keyName: '', valueContent: '' }
+}
+
+const updateVariable = async () => {
+  if (!editVar.value.keyName || !editVar.value.valueContent) {
+    return ElMessage.warning('Key and Value are required')
+  }
+  try {
+    await variableApi.update(editVar.value.id, {
+      keyName: editVar.value.keyName,
+      valueContent: editVar.value.valueContent,
+      environment: { id: selectedEnv.value.id }
+    })
+    ElMessage.success('Variable updated')
+    showEditVarDialog.value = false
+    loadVariables(selectedEnv.value.id)
+  } catch (error) {
+    ElMessage.error('Failed to update variable')
+  }
 }
 
 onMounted(() => {

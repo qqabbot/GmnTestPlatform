@@ -6,6 +6,18 @@
         <el-form-item label="Step Name" style="flex: 1; margin-right: 20px;">
           <el-input v-model="step.stepName" placeholder="Enter step name" />
         </el-form-item>
+      </div>
+
+      <!-- Step Type Selection -->
+      <el-form-item label="Step Type">
+        <el-radio-group v-model="stepType" @change="handleStepTypeChange">
+          <el-radio label="custom">Custom Step</el-radio>
+          <el-radio label="reference">Reference Existing Case</el-radio>
+        </el-radio-group>
+      </el-form-item>
+
+      <!-- Custom Step Fields -->
+      <template v-if="stepType === 'custom'">
         <el-form-item label="Method" style="width: 120px;">
           <el-select v-model="step.method">
             <el-option value="GET" label="GET" />
@@ -14,15 +26,37 @@
             <el-option value="DELETE" label="DELETE" />
           </el-select>
         </el-form-item>
-      </div>
+        <el-form-item label="URL">
+          <variable-input v-model="step.url" placeholder="http://api.example.com/resource">
+            <template #prepend>
+              <el-icon><Link /></el-icon>
+            </template>
+          </variable-input>
+        </el-form-item>
+      </template>
 
-      <el-form-item label="URL">
-        <variable-input v-model="step.url" placeholder="http://api.example.com/resource">
-          <template #prepend>
-            <el-icon><Link /></el-icon>
-          </template>
-        </variable-input>
-      </el-form-item>
+      <!-- Reference Case Selection -->
+      <template v-if="stepType === 'reference'">
+        <el-form-item label="Reference Case" required>
+          <el-select
+            v-model="step.referenceCaseId"
+            placeholder="Select a test case to reference"
+            filterable
+            style="width: 100%"
+            @change="handleReferenceCaseChange"
+          >
+            <el-option
+              v-for="caseOption in availableCases"
+              :key="caseOption.id"
+              :label="`${caseOption.caseName} (${caseOption.method} ${caseOption.url})`"
+              :value="caseOption.id"
+            />
+          </el-select>
+          <div class="help-text" v-if="step.referenceCaseId && selectedReferenceCase">
+            Referencing: {{ selectedReferenceCase.caseName }}
+          </div>
+        </el-form-item>
+      </template>
 
       <!-- Tabs for Details -->
       <el-tabs v-model="activeTab" class="detail-tabs">
@@ -162,6 +196,7 @@
 import { ref, watch, computed } from 'vue'
 import MonacoEditor from './MonacoEditor.vue'
 import VariableInput from './VariableInput.vue'
+import { testCaseApi } from '../api/testCase'
 
 const props = defineProps({
   modelValue: {
@@ -176,9 +211,12 @@ const step = ref(null)
 const activeTab = ref('body')
 const assertions = ref([])
 const extractors = ref([])
+const stepType = ref('custom') // 'custom' or 'reference'
+const availableCases = ref([])
+const selectedReferenceCase = ref(null)
 
 // Initialize local state from prop
-watch(() => props.modelValue, (val) => {
+watch(() => props.modelValue, async (val) => {
   if (val) {
     step.value = JSON.parse(JSON.stringify(val))
     // Attempt to parse assertions/extractors from existing properties if they existed, 
@@ -187,10 +225,23 @@ watch(() => props.modelValue, (val) => {
     // We will store them in `step` object as temporary fields if they exist.
     assertions.value = step.value._ui_assertions || []
     extractors.value = step.value._ui_extractors || []
+    
+    // Determine step type
+    if (step.value.referenceCaseId) {
+      stepType.value = 'reference'
+      await loadReferenceCase(step.value.referenceCaseId)
+    } else {
+      stepType.value = 'custom'
+    }
+    
+    // Load available cases for reference selection
+    await loadAvailableCases()
   } else {
     step.value = null
     assertions.value = []
     extractors.value = []
+    stepType.value = 'custom'
+    selectedReferenceCase.value = null
   }
 }, { immediate: true })
 
@@ -257,6 +308,54 @@ const debounceEmit = () => {
     }
     updateTimer = null
   }, 300)
+}
+
+const loadAvailableCases = async () => {
+  try {
+    // Load all test cases for reference selection
+    // In the future, we could filter by current project/module
+    availableCases.value = await testCaseApi.getAll()
+  } catch (error) {
+    console.error('Failed to load test cases for reference:', error)
+    availableCases.value = []
+  }
+}
+
+const loadReferenceCase = async (caseId) => {
+  try {
+    selectedReferenceCase.value = await testCaseApi.getById(caseId)
+  } catch (error) {
+    console.error('Failed to load referenced case:', error)
+    selectedReferenceCase.value = null
+  }
+}
+
+const handleStepTypeChange = (type) => {
+  if (type === 'reference') {
+    // Clear custom step fields when switching to reference
+    step.value.url = ''
+    step.value.method = 'GET'
+    step.value.body = ''
+    step.value.headers = '{}'
+  } else {
+    // Clear reference when switching to custom
+    step.value.referenceCaseId = null
+    selectedReferenceCase.value = null
+  }
+  debounceEmit()
+}
+
+const handleReferenceCaseChange = async (caseId) => {
+  if (caseId) {
+    await loadReferenceCase(caseId)
+    if (selectedReferenceCase.value) {
+      // Update step name to reflect referenced case
+      step.value.stepName = step.value.stepName || `Reference: ${selectedReferenceCase.value.caseName}`
+    }
+  } else {
+    selectedReferenceCase.value = null
+  }
+  debounceEmit()
 }
 
 </script>

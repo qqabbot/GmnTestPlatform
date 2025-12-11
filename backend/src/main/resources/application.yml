@@ -1,9 +1,11 @@
 spring:
   datasource:
-    url: jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    #url: jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+
+    url: jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useServerPrepStmts=true&cachePrepStmts=true&rewriteBatchedStatements=true&allowMultiQueries=false
     username: insp_dev
     password: insp_dev@123
-    driver-class-name: com.mysql.jdbc.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jmx:
     enabled: false
   application:
@@ -23,14 +25,23 @@ mybatis:
 
 logging:
   level:
-    com.testing.automation.mapper: INFO
+    # SQL Logging - Show SQL statements with parameters
+    com.testing.automation.mapper: DEBUG
+    org.apache.ibatis: DEBUG
+    # Application logging
+    com.testing.automation: INFO
+    # Reduce verbose connection pool logging
+    com.zaxxer.hikari: INFO
+    com.zaxxer.hikari.HikariConfig: WARN
+    com.zaxxer.hikari.pool: INFO
+    # Reduce verbose MySQL driver logging
+    com.mysql: WARN
+    com.mysql.cj: WARN
+    # Reduce verbose Spring JDBC logging
+    org.springframework.jdbc: INFO
+    org.springframework.jdbc.core: INFO
+    # Root logger
     root: INFO
-    com.testing.automation: DEBUG
-    com.zaxxer.hikari: DEBUG
-    com.zaxxer.hikari.HikariConfig: DEBUG
-    com.zaxxer.hikari.pool: DEBUG
-    com.mysql: DEBUG
-    org.springframework.jdbc: DEBUG
 
 server:
   port: 7777
