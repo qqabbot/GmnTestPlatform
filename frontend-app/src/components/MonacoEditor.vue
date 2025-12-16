@@ -1,17 +1,30 @@
 <template>
-  <div class="monaco-editor-container" :style="{ height: height }">
-    <vue-monaco-editor
-      v-model:value="content"
-      :language="language"
-      :theme="computedTheme"
-      :options="editorOptions"
-      @mount="handleMount"
-    />
+  <div class="monaco-editor-container" :style="{ height: isFullscreen ? '100vh' : height }">
+    <div class="editor-toolbar" v-if="showToolbar">
+      <el-button-group>
+        <el-button size="small" @click="formatCode" :disabled="readOnly || language !== 'json'">
+          <el-icon><Document /></el-icon> Format
+        </el-button>
+        <el-button size="small" @click="toggleFullscreen">
+          <el-icon><FullScreen /></el-icon> {{ isFullscreen ? 'Exit' : 'Fullscreen' }}
+        </el-button>
+      </el-button-group>
+    </div>
+    <div :class="['editor-wrapper', { 'fullscreen': isFullscreen }]">
+      <vue-monaco-editor
+        v-model:value="content"
+        :language="language"
+        :theme="computedTheme"
+        :options="editorOptions"
+        @mount="handleMount"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, onBeforeUnmount, onMounted, onUnmounted } from 'vue'
+import { Document, FullScreen } from '@element-plus/icons-vue'
 import { environmentApi } from '../api/environment'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 
@@ -35,8 +48,16 @@ const props = defineProps({
   theme: {
     type: String,
     default: 'vs-dark' // Changed default to Dark as per Phase 3.2 requirements
+  },
+  showToolbar: {
+    type: Boolean,
+    default: true
   }
 })
+
+const isFullscreen = ref(false)
+let editorInstance = null
+let monacoInstance = null
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -59,12 +80,56 @@ const editorOptions = computed(() => ({
   scrollBeyondLastLine: false,
   fontSize: 14,
   tabSize: 2,
-  theme: props.theme
+  theme: props.theme,
+  wordWrap: 'on', // Enable word wrap to prevent horizontal scrolling
+  wrappingIndent: 'indent',
+  lineNumbers: 'on',
+  renderLineHighlight: 'all'
 }))
 
 let completionDisposable = null
 
+const formatCode = () => {
+  if (editorInstance && monacoInstance && props.language === 'json') {
+    try {
+      editorInstance.getAction('editor.action.formatDocument').run()
+    } catch (e) {
+      console.error('Format failed:', e)
+    }
+  }
+}
+
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+  if (editorInstance) {
+    setTimeout(() => {
+      editorInstance.layout()
+    }, 100)
+  }
+}
+
+const handleEscape = (e) => {
+  if (e.key === 'Escape' && isFullscreen.value) {
+    isFullscreen.value = false
+    if (editorInstance) {
+      setTimeout(() => {
+        editorInstance.layout()
+      }, 100)
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleEscape)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEscape)
+})
+
 const handleMount = async (editor, monaco) => {
+  editorInstance = editor
+  monacoInstance = monaco
   // 1. Configure Custom Theme for Variable Highlighting
   monaco.editor.defineTheme('gmn-dark', {
     base: 'vs-dark',
@@ -168,5 +233,46 @@ const handleMount = async (editor, monaco) => {
   border: 1px solid #4c4d4f; /* Darker border for dark theme */
   border-radius: 4px;
   overflow: hidden;
+  position: relative;
+}
+
+.editor-toolbar {
+  padding: 8px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #4c4d4f;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.editor-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-wrapper.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background-color: #1e1e1e;
+}
+
+.monaco-editor-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.monaco-editor-container :deep(.vue-monaco-editor) {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-wrapper.fullscreen .monaco-editor-container {
+  height: 100vh;
+  border: none;
+  border-radius: 0;
 }
 </style>

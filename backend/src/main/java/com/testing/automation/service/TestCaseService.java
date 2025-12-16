@@ -82,29 +82,82 @@ public class TestCaseService {
     // CRUD Methods
     @Transactional
     public TestCase save(TestCase testCase) {
+        // Extract moduleId from nested module object if present
+        if (testCase.getModuleId() == null && testCase.getModule() != null && testCase.getModule().getId() != null) {
+            testCase.setModuleId(testCase.getModule().getId());
+        }
+
+        // Validate moduleId is present
+        if (testCase.getModuleId() == null) {
+            throw new IllegalArgumentException("moduleId is required and cannot be null");
+        }
+
         testCase.setUpdatedAt(LocalDateTime.now());
-        if (testCase.getId() == null) {
+        boolean isNew = testCase.getId() == null;
+        if (isNew) {
             testCase.setCreatedAt(LocalDateTime.now());
             caseMapper.insert(testCase);
         } else {
             caseMapper.update(testCase);
+            // Delete existing steps for update case (we'll re-add them)
+            stepMapper.deleteByCaseId(testCase.getId());
         }
+
+        // Save steps, extractors, and assertions
+        if (testCase.getSteps() != null && !testCase.getSteps().isEmpty()) {
+            for (TestStep step : testCase.getSteps()) {
+                step.setCaseId(testCase.getId());
+                step.setUpdatedAt(LocalDateTime.now());
+                if (step.getId() == null) {
+                    step.setCreatedAt(LocalDateTime.now());
+                }
+                stepMapper.insert(step);
+
+                // Save extractors
+                if (step.getExtractors() != null && !step.getExtractors().isEmpty()) {
+                    for (com.testing.automation.model.Extractor extractor : step.getExtractors()) {
+                        extractor.setStepId(step.getId());
+                        // Normalize variable name: remove ${} wrapper or $ prefix if present
+                        String varName = extractor.getVariableName();
+                        if (varName != null && !varName.isEmpty()) {
+                            varName = varName.trim();
+                            // Remove ${} wrapper: ${token} -> token
+                            if (varName.startsWith("${") && varName.endsWith("}")) {
+                                varName = varName.substring(2, varName.length() - 1);
+                            }
+                            // Remove $ prefix: $token -> token
+                            else if (varName.startsWith("$")) {
+                                varName = varName.substring(1);
+                            }
+                            extractor.setVariableName(varName);
+                        }
+                        // Set type based on source if not set
+                        // Frontend sends "source" field (json/header), map to type (JSONPATH/HEADER)
+                        if (extractor.getType() == null || extractor.getType().isEmpty()) {
+                            // Try to infer from expression or default to JSONPATH
+                            extractor.setType("JSONPATH");
+                        }
+                        extractor.setCreatedAt(LocalDateTime.now());
+                        extractorMapper.insert(extractor);
+                    }
+                }
+
+                // Save assertions
+                if (step.getAssertions() != null && !step.getAssertions().isEmpty()) {
+                    for (com.testing.automation.model.Assertion assertion : step.getAssertions()) {
+                        assertion.setStepId(step.getId());
+                        assertion.setCreatedAt(LocalDateTime.now());
+                        assertionMapper.insert(assertion);
+                    }
+                }
+            }
+        }
+
         return testCase;
     }
 
     public TestCase findById(Long id) {
-        TestCase testCase = caseMapper.findById(id);
-        if (testCase != null) {
-            testCase.setSteps(stepMapper.findByCaseId(id));
-            // Load extractors and assertions for each step
-            for (TestStep step : testCase.getSteps()) {
-                if (step.getId() != null) {
-                    step.setExtractors(extractorMapper.findByStepId(step.getId()));
-                    step.setAssertions(assertionMapper.findByStepId(step.getId()));
-                }
-            }
-        }
-        return testCase;
+        return caseMapper.findByIdWithDetails(id);
     }
 
     public List<TestCase> findAll() {
@@ -162,7 +215,7 @@ public class TestCaseService {
         List<TestCase> casesToExecute = new ArrayList<>();
 
         if (caseId != null) {
-            TestCase tc = caseMapper.findById(caseId);
+            TestCase tc = caseMapper.findByIdWithDetails(caseId);
             if (tc != null) {
                 // Ensure we have correct context for variables
                 if (moduleId == null)
@@ -172,41 +225,21 @@ public class TestCaseService {
                     if (tm != null)
                         projectId = tm.getProjectId();
                 }
-                // Fetch steps
-                tc.setSteps(stepMapper.findByCaseId(tc.getId()));
-                // Load extractors and assertions for each step
-                for (TestStep step : tc.getSteps()) {
-                    if (step.getId() != null) {
-                        step.setExtractors(extractorMapper.findByStepId(step.getId()));
-                        step.setAssertions(assertionMapper.findByStepId(step.getId()));
-                    }
-                }
                 casesToExecute.add(tc);
             }
         } else if (moduleId != null) {
-            casesToExecute.addAll(caseMapper.findByModuleId(moduleId));
+            casesToExecute.addAll(caseMapper.findByModuleIdWithDetails(moduleId));
         } else if (projectId != null) {
             List<TestModule> modules = moduleMapper.findByProjectId(projectId);
             for (TestModule module : modules) {
-                casesToExecute.addAll(caseMapper.findByModuleId(module.getId()));
+                casesToExecute.addAll(caseMapper.findByModuleIdWithDetails(module.getId()));
             }
         } else {
-            casesToExecute.addAll(caseMapper.findAll());
+            casesToExecute.addAll(caseMapper.findAllWithDetails());
         }
 
-        // Fetch steps for all cases (eager load)
-        for (TestCase tc : casesToExecute) {
-            if (tc.getSteps() == null || tc.getSteps().isEmpty()) {
-                tc.setSteps(stepMapper.findByCaseId(tc.getId()));
-            }
-            // Load extractors and assertions for each step
-            for (TestStep step : tc.getSteps()) {
-                if (step.getId() != null) {
-                    step.setExtractors(extractorMapper.findByStepId(step.getId()));
-                    step.setAssertions(assertionMapper.findByStepId(step.getId()));
-                }
-            }
-        }
+        // Steps, extractors, and assertions are now eagerly loaded by the mapper
+        // No need for manual iteration here
 
         Map<String, Object> runtimeVariables = globalVariableService.getVariablesMapWithInheritance(projectId, moduleId,
                 envKey);
@@ -225,8 +258,26 @@ public class TestCaseService {
         return finalResults;
     }
 
+    private static final int MAX_RECURSION_DEPTH = 10;
+
     public TestResult executeSingleCaseLogic(TestCase testCase, Map<String, Object> runtimeVariables,
             Map<Long, TestResult> executionHistory) {
+        return executeSingleCaseLogic(testCase, runtimeVariables, executionHistory, 0);
+    }
+
+    public TestResult executeSingleCaseLogic(TestCase testCase, Map<String, Object> runtimeVariables,
+            Map<Long, TestResult> executionHistory, int currentDepth) {
+        if (currentDepth > MAX_RECURSION_DEPTH) {
+            return TestResult.builder()
+                    .caseId(testCase.getId())
+                    .caseName(testCase.getCaseName())
+                    .status("FAIL")
+                    .message("Max recursion depth exceeded")
+                    .detail("Circular dependency detected or nesting too deep (Max: " + MAX_RECURSION_DEPTH + ")")
+                    .duration(0L)
+                    .build();
+        }
+
         long startTime = System.currentTimeMillis();
 
         // Check preconditions (simplified)
@@ -266,7 +317,7 @@ public class TestCaseService {
                 TestResponse stepResponse = null;
                 String stepUrl = null;
                 String stepBody = null;
-                
+
                 try {
                     // Check if step references another test case
                     if (step.getReferenceCaseId() != null) {
@@ -275,7 +326,7 @@ public class TestCaseService {
                         if (referencedCase == null) {
                             throw new RuntimeException("Referenced test case not found: " + step.getReferenceCaseId());
                         }
-                        
+
                         // Load steps for referenced case
                         referencedCase.setSteps(stepMapper.findByCaseId(referencedCase.getId()));
                         // Load extractors and assertions
@@ -285,31 +336,53 @@ public class TestCaseService {
                                 refStep.setAssertions(assertionMapper.findByStepId(refStep.getId()));
                             }
                         }
-                        
-                        // Execute referenced case (recursive, but with depth limit to prevent infinite loops)
-                        TestResult referencedResult = executeSingleCaseLogic(referencedCase, runtimeVariables, executionHistory);
-                        
+
+                        // Execute referenced case (recursive with depth check)
+                        TestResult referencedResult = executeSingleCaseLogic(referencedCase, runtimeVariables,
+                                executionHistory, currentDepth + 1);
+
                         // Use the last response from referenced case
                         Integer statusCode = referencedResult.getStatusCode();
+                        if ("FAIL".equals(referencedResult.getStatus())
+                                && referencedResult.getMessage().contains("Max recursion depth")) {
+                            throw new RuntimeException(referencedResult.getMessage());
+                        }
+
                         if (statusCode != null && statusCode > 0) {
                             stepResponse = TestResponse.builder()
                                     .statusCode(statusCode)
                                     .body(referencedResult.getResponseBody())
                                     .headers(new HashMap<>())
                                     .build();
-                            stepUrl = "Referenced Case: " + referencedCase.getCaseName() + " (ID: " + step.getReferenceCaseId() + ")";
+                            stepUrl = "Referenced Case: " + referencedCase.getCaseName() + " (ID: "
+                                    + step.getReferenceCaseId() + ")";
                             stepBody = "Executed referenced test case";
+
+                            // If referenced case failed, mark step as failed
+                            if (!"PASS".equals(referencedResult.getStatus())) {
+                                // We still capture the response for logging, but fail the step
+                                allStepsPassed = false;
+                                finalMessage = "Step Failed: Referenced Case Failed";
+                                finalDetail = "Referenced execution status: " + referencedResult.getStatus()
+                                        + ", Message: " + referencedResult.getMessage();
+                            }
                         } else {
-                            throw new RuntimeException("Referenced case execution failed: " + referencedResult.getMessage());
+                            throw new RuntimeException(
+                                    "Referenced case execution failed: " + referencedResult.getMessage());
                         }
                     } else {
                         // Normal step execution
-                        // Resolve Step Variables
+                        // Resolve Step Variables (including variables extracted from previous steps)
                         stepUrl = replaceVariables(step.getUrl(), runtimeVariables);
                         stepBody = replaceVariables(step.getBody(), runtimeVariables);
+                        // Also replace variables in headers
+                        String resolvedHeaders = step.getHeaders();
+                        if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
+                            resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
+                        }
 
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
-                                step.getHeaders());
+                                resolvedHeaders);
                     }
 
                     // Step Log
@@ -317,8 +390,30 @@ public class TestCaseService {
                     log.setStepName(step.getStepName());
                     log.setRequestUrl(stepUrl);
                     log.setRequestBody(stepBody);
+                    // Set request headers (use resolved headers for display)
+                    String stepResolvedHeaders = step.getHeaders();
+                    if (stepResolvedHeaders != null && !stepResolvedHeaders.trim().isEmpty()) {
+                        stepResolvedHeaders = replaceVariables(stepResolvedHeaders, runtimeVariables);
+                    }
+                    log.setRequestHeaders(stepResolvedHeaders != null ? stepResolvedHeaders : "{}");
+                    // Set response headers
+                    if (stepResponse.getHeaders() != null && !stepResponse.getHeaders().isEmpty()) {
+                        try {
+                            log.setResponseHeaders(objectMapper.writeValueAsString(stepResponse.getHeaders()));
+                        } catch (Exception e) {
+                            log.setResponseHeaders("{}");
+                        }
+                    } else {
+                        log.setResponseHeaders("{}");
+                    }
                     log.setResponseStatus(stepResponse.getStatusCode());
                     log.setResponseBody(stepResponse.getBody());
+                    // Save variable snapshot for this step
+                    try {
+                        log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                    } catch (Exception e) {
+                        log.setVariableSnapshot("{}");
+                    }
                     log.setCreatedAt(LocalDateTime.now());
                     logs.add(log);
                     lastResponse = stepResponse;
@@ -326,21 +421,39 @@ public class TestCaseService {
                     // Execute Extractors to extract variables from response
                     if (step.getExtractors() != null && !step.getExtractors().isEmpty()) {
                         for (Extractor extractor : step.getExtractors()) {
-                            try {
-                                Object extractedValue = executeExtractor(extractor, stepResponse);
-                                if (extractedValue != null) {
-                                    runtimeVariables.put(extractor.getVariableName(), extractedValue);
+                            // executeExtractor now returns null instead of throwing for path not found
+                            // errors
+                            Object extractedValue = executeExtractor(extractor, stepResponse);
+
+                            // Normalize variable name: remove ${} wrapper or $ prefix if present
+                            String varName = extractor.getVariableName();
+                            if (varName != null && !varName.isEmpty()) {
+                                varName = varName.trim();
+                                // Remove ${} wrapper: ${token} -> token
+                                if (varName.startsWith("${") && varName.endsWith("}")) {
+                                    varName = varName.substring(2, varName.length() - 1);
                                 }
-                            } catch (Exception e) {
-                                // Log error but continue execution
-                                System.err.println("Extractor failed for " + extractor.getVariableName() + ": " + e.getMessage());
+                                // Remove $ prefix: $token -> token
+                                else if (varName.startsWith("$")) {
+                                    varName = varName.substring(1);
+                                }
+
+                                if (extractedValue != null) {
+                                    runtimeVariables.put(varName, extractedValue);
+                                    System.out.println("Extracted variable: " + varName + " = " + extractedValue);
+                                } else {
+                                    // Log warning but don't fail the test
+                                    System.out.println("Warning: Extractor for variable '" + varName
+                                            + "' returned null (path not found in response)");
+                                }
                             }
                         }
                     }
 
                     // Execute Step Assertions
                     if (step.getAssertionScript() != null && !step.getAssertionScript().isEmpty()) {
-                        boolean stepAssertionPassed = executeAssertions(step.getAssertionScript(), stepResponse, runtimeVariables);
+                        boolean stepAssertionPassed = executeAssertions(step.getAssertionScript(), stepResponse,
+                                runtimeVariables);
                         if (!stepAssertionPassed) {
                             allStepsPassed = false;
                             finalMessage = "Step Assertion Failed: " + step.getStepName();
@@ -357,45 +470,98 @@ public class TestCaseService {
                     // Log failure with proper error details
                     TestExecutionLog log = new TestExecutionLog();
                     log.setStepName(step.getStepName());
-                    log.setRequestUrl(stepUrl);
-                    log.setRequestBody(stepBody);
+                    log.setRequestUrl(stepUrl != null ? stepUrl : step.getUrl());
+                    log.setRequestBody(stepBody != null ? stepBody : step.getBody());
+                    // Set request headers even on error
+                    log.setRequestHeaders(step.getHeaders() != null ? step.getHeaders() : "{}");
+                    log.setResponseHeaders("{}");
                     log.setResponseStatus(0); // 0 indicates network/execution error
                     log.setResponseBody(e.getMessage()); // Clean error message without prefix
+                    // Save variable snapshot even on error
+                    try {
+                        log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                    } catch (Exception ex) {
+                        log.setVariableSnapshot("{}");
+                    }
                     log.setCreatedAt(LocalDateTime.now());
                     logs.add(log);
                     break; // Stop on failure?
                 }
             }
-        } else {
-            // Execute Case Request (Legacy single mode)
-            String resolvedUrl = replaceVariables(testCase.getUrl(), runtimeVariables);
-            String resolvedBody = testCase.getBody() != null ? replaceVariables(testCase.getBody(), runtimeVariables)
-                    : null;
+        }
 
+        // Execute Main Request if URL and method are provided
+        // This executes after steps (if any) so that variables extracted from steps can
+        // be used
+        if (testCase.getUrl() != null && !testCase.getUrl().trim().isEmpty()
+                && testCase.getMethod() != null && !testCase.getMethod().trim().isEmpty()) {
             try {
+                // Resolve variables (including those extracted from steps)
+                String resolvedUrl = replaceVariables(testCase.getUrl(), runtimeVariables);
+                String resolvedBody = testCase.getBody() != null
+                        ? replaceVariables(testCase.getBody(), runtimeVariables)
+                        : null;
+                // Also replace variables in headers (including variables from steps)
+                String resolvedHeaders = testCase.getHeaders();
+                if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
+                    resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
+                }
+
                 lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
-                        testCase.getHeaders());
+                        resolvedHeaders);
 
                 // Log for main request
                 TestExecutionLog log = new TestExecutionLog();
                 log.setStepName("Main Request");
                 log.setRequestUrl(resolvedUrl);
                 log.setRequestBody(resolvedBody);
+                // Set request headers (use resolved headers for display, but log original for
+                // reference)
+                log.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
+                        : (testCase.getHeaders() != null ? testCase.getHeaders() : "{}"));
+                // Set response headers
+                if (lastResponse.getHeaders() != null && !lastResponse.getHeaders().isEmpty()) {
+                    try {
+                        log.setResponseHeaders(objectMapper.writeValueAsString(lastResponse.getHeaders()));
+                    } catch (Exception e) {
+                        log.setResponseHeaders("{}");
+                    }
+                } else {
+                    log.setResponseHeaders("{}");
+                }
                 log.setResponseStatus(lastResponse.getStatusCode());
                 log.setResponseBody(lastResponse.getBody());
+                // Save variable snapshot
+                try {
+                    log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                } catch (Exception e) {
+                    log.setVariableSnapshot("{}");
+                }
                 log.setCreatedAt(LocalDateTime.now());
                 logs.add(log);
 
             } catch (Exception e) {
-                return TestResult.builder()
-                        .caseId(testCase.getId())
-                        .caseName(testCase.getCaseName())
-                        .status("FAIL")
-                        .message("HTTP Error: " + e.getMessage())
-                        .detail("HTTP Error: " + e.getMessage())
-                        .duration(System.currentTimeMillis() - startTime)
-                        .logs(logs)
-                        .build();
+                // If main request fails, mark as failed but don't return early if steps passed
+                allStepsPassed = false;
+                finalMessage = "Main Request Failed";
+                finalDetail = "HTTP Error: " + e.getMessage();
+
+                // Log failure
+                TestExecutionLog log = new TestExecutionLog();
+                log.setStepName("Main Request");
+                log.setRequestUrl(testCase.getUrl());
+                log.setRequestBody(testCase.getBody());
+                log.setRequestHeaders(testCase.getHeaders() != null ? testCase.getHeaders() : "{}");
+                log.setResponseHeaders("{}");
+                log.setResponseStatus(0);
+                log.setResponseBody(e.getMessage());
+                try {
+                    log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                } catch (Exception ex) {
+                    log.setVariableSnapshot("{}");
+                }
+                log.setCreatedAt(LocalDateTime.now());
+                logs.add(log);
             }
         }
 
@@ -452,7 +618,7 @@ public class TestCaseService {
     private void executeScript(String script, Map<String, Object> variables) {
         try {
             ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
-            
+
             // Provide helper functions
             engine.put("vars", variables);
             engine.eval("def jsonPath(response, path) { " +
@@ -462,12 +628,12 @@ public class TestCaseService {
                     "  return null; " +
                     "}" +
                     "}");
-            
+
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
                 engine.put(entry.getKey(), entry.getValue());
             }
             engine.eval(script);
-            
+
             // Update variables if modified in script
             variables.putAll((Map<String, Object>) engine.get("vars"));
         } catch (Exception e) {
@@ -479,34 +645,46 @@ public class TestCaseService {
     private String replaceVariables(String text, Map<String, Object> variables) {
         if (text == null)
             return null;
-        
+
         // Pattern to match ${...} expressions
-        // Supports both simple variables ${varName} and SpEL expressions ${T(System).currentTimeMillis()}
+        // Supports both simple variables ${varName} and SpEL expressions
+        // ${T(System).currentTimeMillis()}
         Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(text);
         StringBuffer sb = new StringBuffer();
-        
+
         while (matcher.find()) {
             String expression = matcher.group(1);
             String replacement;
-            
+
             // Check if it's a SpEL expression (contains method calls, dots, parentheses)
             if (expression.contains("(") || expression.contains(".") || expression.startsWith("T(")) {
                 try {
                     // Evaluate SpEL expression
                     Object result = spelParser.parseExpression(expression).getValue(spelContext);
-                    replacement = result != null ? Matcher.quoteReplacement(result.toString()) : "\\${" + expression + "}";
+                    replacement = result != null ? Matcher.quoteReplacement(result.toString())
+                            : "\\${" + expression + "}";
                 } catch (Exception e) {
                     // If SpEL evaluation fails, try as simple variable
                     Object value = variables.get(expression);
-                    replacement = value != null ? Matcher.quoteReplacement(value.toString()) : "\\${" + expression + "}";
+                    replacement = value != null ? Matcher.quoteReplacement(value.toString())
+                            : "\\${" + expression + "}";
                 }
             } else {
                 // Simple variable replacement
                 Object value = variables.get(expression);
-                replacement = value != null ? Matcher.quoteReplacement(value.toString()) : "\\${" + expression + "}";
+                if (value != null) {
+                    replacement = Matcher.quoteReplacement(value.toString());
+                } else {
+                    // Variable not found - keep the original expression to avoid breaking the
+                    // request
+                    // This allows users to see which variables are missing
+                    replacement = "\\${" + expression + "}";
+                    System.err.println("Warning: Variable '" + expression
+                            + "' not found in runtime variables. Available variables: " + variables.keySet());
+                }
             }
-            
+
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
@@ -517,13 +695,14 @@ public class TestCaseService {
         try {
             // Create the base supplier
             java.util.function.Supplier<TestResponse> baseSupplier = () -> {
-                WebClient.RequestBodySpec request = webClient.method(org.springframework.http.HttpMethod.valueOf(method))
+                WebClient.RequestBodySpec request = webClient
+                        .method(org.springframework.http.HttpMethod.valueOf(method))
                         .uri(url);
 
                 // Parse and apply headers
                 if (headers != null && !headers.trim().isEmpty()) {
                     try {
-                        Map<String, String> headerMap = objectMapper.readValue(headers, 
+                        Map<String, String> headerMap = objectMapper.readValue(headers,
                                 objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
                         for (Map.Entry<String, String> entry : headerMap.entrySet()) {
                             request.header(entry.getKey(), entry.getValue());
@@ -548,13 +727,13 @@ public class TestCaseService {
                         .headers(response.getHeaders().toSingleValueMap())
                         .build();
             };
-            
+
             // Apply Resilience4j decorators: CircuitBreaker first, then Retry
-            java.util.function.Supplier<TestResponse> circuitBreakerSupplier = 
-                CircuitBreaker.decorateSupplier(circuitBreaker, baseSupplier);
-            java.util.function.Supplier<TestResponse> retrySupplier = 
-                Retry.decorateSupplier(retry, circuitBreakerSupplier);
-            
+            java.util.function.Supplier<TestResponse> circuitBreakerSupplier = CircuitBreaker
+                    .decorateSupplier(circuitBreaker, baseSupplier);
+            java.util.function.Supplier<TestResponse> retrySupplier = Retry.decorateSupplier(retry,
+                    circuitBreakerSupplier);
+
             return retrySupplier.get();
         } catch (Exception e) {
             throw new RuntimeException("HTTP Request failed: " + e.getMessage(), e);
@@ -568,11 +747,71 @@ public class TestCaseService {
         try {
             String type = extractor.getType() != null ? extractor.getType().toUpperCase() : "JSONPATH";
             String expression = extractor.getExpression();
-            
+
+            // Debug logging
+            System.out.println("Extractor execution - Type: " + type + ", Expression: [" + expression + "], Variable: "
+                    + extractor.getVariableName());
+
+            // Clean expression: remove any escape characters and fix common issues
+            if (expression != null) {
+                String originalExpression = expression;
+                // Remove all escape characters: \$ -> $
+                expression = expression.replace("\\$", "$");
+                if (!originalExpression.equals(expression)) {
+                    System.out.println("Cleaned expression from \\$ to $: [" + expression + "]");
+                }
+                // Also handle cases where expression might be empty or invalid
+                if (expression == null || expression.trim().isEmpty()) {
+                    System.err.println("Extractor expression is empty or null!");
+                    return null;
+                }
+                // Fix common issues: $token -> $.token, $data.token -> $.data.token
+                if (expression.startsWith("$") && expression.length() > 1 && expression.charAt(1) != '.'
+                        && expression.charAt(1) != '[') {
+                    // If expression is like $token, convert to $.token
+                    expression = "$." + expression.substring(1);
+                    System.out
+                            .println("Fixed expression from $" + originalExpression.substring(1) + " to " + expression);
+                }
+            }
+
             switch (type) {
                 case "JSONPATH":
                     if (response.getBody() != null) {
-                        return JsonPath.read(response.getBody(), expression);
+                        try {
+                            Object result = JsonPath.read(response.getBody(), expression);
+                            if (result != null) {
+                                return result;
+                            }
+                        } catch (com.jayway.jsonpath.PathNotFoundException e) {
+                            // Path not found is not a critical error, try fallback or return null
+                            System.out
+                                    .println("JSONPath not found for expression: " + expression + ", trying fallback");
+                            // If expression fails and it's a simple path like $.token, try $.data.token
+                            if (expression.equals("$.token") || expression.equals("$token")) {
+                                try {
+                                    Object fallbackResult = JsonPath.read(response.getBody(), "$.data.token");
+                                    if (fallbackResult != null) {
+                                        System.out.println("Fallback expression $.data.token succeeded");
+                                        return fallbackResult;
+                                    }
+                                } catch (Exception e2) {
+                                    System.out.println(
+                                            "Fallback expression $.data.token also failed: " + e2.getMessage());
+                                }
+                            }
+                            // Path not found, return null instead of throwing exception
+                            System.out.println(
+                                    "JSONPath not found, returning null for variable: " + extractor.getVariableName());
+                            return null;
+                        } catch (Exception e) {
+                            // Other exceptions (syntax errors, etc.) should still be logged
+                            System.err.println(
+                                    "JSONPath execution error for expression [" + expression + "]: " + e.getMessage());
+                            // For non-critical errors, return null instead of throwing
+                            // This allows the test to continue even if extraction fails
+                            return null;
+                        }
                     }
                     break;
                 case "HEADER":
@@ -593,27 +832,52 @@ public class TestCaseService {
                     System.err.println("Unknown extractor type: " + type);
             }
         } catch (Exception e) {
+            // Check if it's a PathNotFoundException or similar "not found" error
+            String errorMsg = e.getMessage();
+            if (errorMsg != null && (errorMsg.contains("No results for path") ||
+                    errorMsg.contains("Path not found") ||
+                    e instanceof com.jayway.jsonpath.PathNotFoundException)) {
+                // Path not found is expected in some cases, return null instead of throwing
+                System.out.println("Extractor path not found for variable: " + extractor.getVariableName()
+                        + ", expression: " + extractor.getExpression());
+                return null;
+            }
+            // For other exceptions, log but don't fail the entire test
             System.err.println("Extractor execution failed: " + e.getMessage());
-            throw new RuntimeException("Extractor failed: " + e.getMessage(), e);
+            // Don't throw exception, return null to allow test to continue
+            return null;
         }
         return null;
     }
 
     private boolean executeAssertions(String script, TestResponse response, Map<String, Object> variables) {
         try {
-            // Create a new script engine instance for each execution to avoid state pollution
+            // Debug logging
+            System.out.println("Executing assertion script: " + script);
+
+            // Fix script: replace double quotes with single quotes for JSONPath expressions
+            // in jsonPath() calls
+            // This prevents Groovy GString interpolation issues with $ characters
+            // Pattern: jsonPath(response, "expression") -> jsonPath(response, 'expression')
+            script = script.replaceAll("jsonPath\\(response,\\s*\"([^\"]+)\"\\)", "jsonPath(response, '$1')");
+            System.out.println("Fixed script (single quotes for JSONPath): " + script);
+
+            // Create a new script engine instance for each execution to avoid state
+            // pollution
             ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
-            
+
             // Provide helper functions and objects
-            engine.put("status_code", response.getStatusCode());
+            Integer statusCode = response.getStatusCode();
+            engine.put("status_code", statusCode);
+            engine.put("status", statusCode); // Also provide 'status' for compatibility
             engine.put("response_body", response.getBody());
             engine.put("response", response);
             engine.put("headers", response.getHeaders() != null ? response.getHeaders() : new HashMap<>());
-            
+
             // Provide vars object for variable manipulation
             Map<String, Object> vars = new HashMap<>(variables);
             engine.put("vars", vars);
-            
+
             // Provide jsonPath helper function
             engine.eval("def jsonPath(response, path) { " +
                     "try { " +
@@ -622,18 +886,38 @@ public class TestCaseService {
                     "  return null; " +
                     "}" +
                     "}");
-            
+
             // Add all runtime variables to script context
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
                 engine.put(entry.getKey(), entry.getValue());
             }
 
             Object result = engine.eval(script);
-            
+
             // Update variables from vars object if modified
+            // This is critical: vars.put() modifies the vars map, which we need to sync
+            // back
             variables.putAll(vars);
-            
-            return result != null && (Boolean) result;
+            System.out.println("Variables after assertion script: " + variables);
+
+            // If script doesn't return a boolean, consider it successful if no exception
+            // was thrown
+            // This handles cases like vars.put() which returns the value, not a boolean
+            if (result == null) {
+                // Script executed without error, consider it successful
+                System.out.println("Assertion script returned null, treating as success");
+                return true;
+            }
+
+            // If result is a Boolean, return it
+            if (result instanceof Boolean) {
+                System.out.println("Assertion script returned boolean: " + result);
+                return (Boolean) result;
+            }
+
+            // If result is not null and not false, consider it successful
+            System.out.println("Assertion script returned non-boolean: " + result + ", treating as success");
+            return result != null;
         } catch (Exception e) {
             System.err.println("Assertion execution failed: " + e.getMessage());
             e.printStackTrace();

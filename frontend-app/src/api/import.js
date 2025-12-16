@@ -13,8 +13,8 @@ export const importApi = {
         })
     },
 
-    importCurl(projectId, moduleId, curlCommand, asStep = false, caseId = null) {
-        const params = { projectId, asStep }
+    importCurl(projectId, moduleId, curlCommand, asStep = false, caseId = null, parseOnly = false) {
+        const params = { projectId, asStep, parseOnly }
         if (moduleId) params.moduleId = moduleId
         if (caseId) params.caseId = caseId
         return request.post('/import/curl', curlCommand, {

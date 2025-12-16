@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.testing.automation.mapper.TestCaseMapper">
+
+    <resultMap id="TestCaseResultMap" type="com.testing.automation.model.TestCase">
+        <id column="id" property="id" />
+        <result column="case_name" property="caseName" />
+        <result column="module_id" property="moduleId" />
+        <result column="method" property="method" />
+        <result column="url" property="url" />
+        <result column="headers" property="headers" />
+        <result column="body" property="body" />
+        <result column="precondition" property="precondition" />
+        <result column="setup_script" property="setupScript" />
+        <result column="assertion_script" property="assertionScript" />
+        <result column="is_active" property="isActive" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+        
+        <collection property="steps" ofType="com.testing.automation.model.TestStep">
+            <id column="step_id" property="id" />
+            <result column="case_id" property="caseId" />
+            <result column="step_order" property="stepOrder" />
+            <result column="step_name" property="stepName" />
+            <result column="step_method" property="method" />
+            <result column="step_url" property="url" />
+            <result column="step_headers" property="headers" />
+            <result column="step_body" property="body" />
+            <result column="step_auth_type" property="authType" />
+            <result column="step_auth_value" property="authValue" />
+            <result column="step_assertion_script" property="assertionScript" />
+            <result column="step_enabled" property="enabled" />
+            <result column="reference_case_id" property="referenceCaseId" />
+            <result column="step_created_at" property="createdAt" />
+            <result column="step_updated_at" property="updatedAt" />
+            
+            <collection property="extractors" ofType="com.testing.automation.model.Extractor">
+                <id column="extractor_id" property="id" />
+                <result column="step_id" property="stepId" />
+                <result column="extractor_type" property="type" />
+                <result column="variable_name" property="variableName" />
+                <result column="expression" property="expression" />
+                <result column="extractor_created_at" property="createdAt" />
+            </collection>
+            
+            <collection property="assertions" ofType="com.testing.automation.model.Assertion">
+                <id column="assertion_id" property="id" />
+                <result column="step_id" property="stepId" />
+                <result column="assertion_type" property="type" />
+                <result column="source" property="source" />
+                <result column="property" property="property" />
+                <result column="operator" property="operator" />
+                <result column="expected_value" property="expectedValue" />
+                <result column="assertion_created_at" property="createdAt" />
+            </collection>
+        </collection>
+    </resultMap>
+
+    <select id="findAllWithDetails" resultMap="TestCaseResultMap">
+        SELECT 
+            tc.id, tc.case_name, tc.module_id, tc.method, tc.url, tc.headers, tc.body, 
+            tc.precondition, tc.setup_script, tc.assertion_script, tc.is_active, tc.created_at, tc.updated_at,
+            
+            ts.id as step_id, ts.case_id, ts.step_order, ts.step_name, ts.method as step_method, ts.url as step_url,
+            ts.headers as step_headers, ts.body as step_body, ts.auth_type as step_auth_type, ts.auth_value as step_auth_value,
+            ts.assertion_script as step_assertion_script, ts.enabled as step_enabled, ts.reference_case_id,
+            ts.created_at as step_created_at, ts.updated_at as step_updated_at,
+            
+            te.id as extractor_id, te.step_id, te.type as extractor_type, te.variable_name, te.expression, te.created_at as extractor_created_at,
+            
+            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.source, ta.property, ta.operator, ta.expected_value, ta.created_at as assertion_created_at
+        FROM test_case tc
+        LEFT JOIN test_step ts ON tc.id = ts.case_id
+        LEFT JOIN test_extractor te ON ts.id = te.step_id
+        LEFT JOIN test_assertion ta ON ts.id = ta.step_id
+        ORDER BY tc.id DESC, ts.step_order ASC
+    </select>
+    
+    <select id="findByModuleIdWithDetails" resultMap="TestCaseResultMap">
+        SELECT 
+            tc.id, tc.case_name, tc.module_id, tc.method, tc.url, tc.headers, tc.body, 
+            tc.precondition, tc.setup_script, tc.assertion_script, tc.is_active, tc.created_at, tc.updated_at,
+            
+            ts.id as step_id, ts.case_id, ts.step_order, ts.step_name, ts.method as step_method, ts.url as step_url,
+            ts.headers as step_headers, ts.body as step_body, ts.auth_type as step_auth_type, ts.auth_value as step_auth_value,
+            ts.assertion_script as step_assertion_script, ts.enabled as step_enabled, ts.reference_case_id,
+            ts.created_at as step_created_at, ts.updated_at as step_updated_at,
+            
+            te.id as extractor_id, te.step_id, te.type as extractor_type, te.variable_name, te.expression, te.created_at as extractor_created_at,
+            
+            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.source, ta.property, ta.operator, ta.expected_value, ta.created_at as assertion_created_at
+        FROM test_case tc
+        LEFT JOIN test_step ts ON tc.id = ts.case_id
+        LEFT JOIN test_extractor te ON ts.id = te.step_id
+        LEFT JOIN test_assertion ta ON ts.id = ta.step_id
+        WHERE tc.module_id = #{moduleId}
+        ORDER BY tc.id DESC, ts.step_order ASC
+    </select>
+    
+    <select id="findByIdWithDetails" resultMap="TestCaseResultMap">
+        SELECT 
+            tc.id, tc.case_name, tc.module_id, tc.method, tc.url, tc.headers, tc.body, 
+            tc.precondition, tc.setup_script, tc.assertion_script, tc.is_active, tc.created_at, tc.updated_at,
+            
+            ts.id as step_id, ts.case_id, ts.step_order, ts.step_name, ts.method as step_method, ts.url as step_url,
+            ts.headers as step_headers, ts.body as step_body, ts.auth_type as step_auth_type, ts.auth_value as step_auth_value,
+            ts.assertion_script as step_assertion_script, ts.enabled as step_enabled, ts.reference_case_id,
+            ts.created_at as step_created_at, ts.updated_at as step_updated_at,
+            
+            te.id as extractor_id, te.step_id, te.type as extractor_type, te.variable_name, te.expression, te.created_at as extractor_created_at,
+            
+            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.source, ta.property, ta.operator, ta.expected_value, ta.created_at as assertion_created_at
+        FROM test_case tc
+        LEFT JOIN test_step ts ON tc.id = ts.case_id
+        LEFT JOIN test_extractor te ON ts.id = te.step_id
+        LEFT JOIN test_assertion ta ON ts.id = ta.step_id
+        WHERE tc.id = #{id}
+        ORDER BY ts.step_order ASC
+    </select>
+
+</mapper>

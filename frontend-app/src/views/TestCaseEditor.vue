@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="editor-header">
       <div class="header-left">
-        <el-button @click="$router.back()" link>
+        <el-button @click="router.back()" link>
           <el-icon><ArrowLeft /></el-icon> Back
         </el-button>
         <el-divider direction="vertical" />
@@ -75,18 +75,13 @@
                 </el-form-item>
 
                 <el-form-item label="Headers">
-                  <monaco-editor v-model="store.currentCase.headers" language="json" height="150px" />
+                  <monaco-editor v-model="store.currentCase.headers" language="json" height="150px" :show-toolbar="true" />
                   <div class="help-text">JSON headers object</div>
                 </el-form-item>
                 
                 <el-form-item label="Request Body">
-                  <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <monaco-editor v-model="store.currentCase.body" language="json" height="200px" />
-                    <el-button @click="showCurlDialog = true" size="small" type="info" style="align-self: flex-start;">
-                      <el-icon><DocumentCopy /></el-icon> Import from cURL
-                    </el-button>
-                  </div>
-                  <div class="help-text">JSON request body (for POST/PUT/PATCH methods). Or paste cURL command to auto-fill.</div>
+                  <monaco-editor v-model="store.currentCase.body" language="json" height="200px" :show-toolbar="true" />
+                  <div class="help-text">JSON request body (for POST/PUT/PATCH methods)</div>
                 </el-form-item>
                 
                 <el-divider />
@@ -163,7 +158,7 @@
             v-model="curlCommand"
             type="textarea"
             :rows="8"
-            placeholder="curl -X POST 'https://api.example.com/users' -H 'Content-Type: application/json' -d '{\"name\":\"test\"}'"
+            :placeholder="curlPlaceholder"
           />
           <div class="help-text" style="margin-top: 8px;">
             Paste your cURL command here. It will automatically parse method, URL, headers, and body.
@@ -215,61 +210,98 @@
 
         <!-- Actual Execution Result -->
         <div v-else>
-          <el-tag :type="store.executionResult.status === 'PASS' ? 'success' : 'danger'" size="large" style="margin-bottom: 20px;">
-            {{ store.executionResult.status }}
-          </el-tag>
-          
-          <h3>Duration</h3>
-          <p>{{ store.executionResult.duration }} ms</p>
+          <div class="result-summary">
+            <el-tag :type="store.executionResult.status === 'PASS' ? 'success' : 'danger'" size="large" style="margin-right: 20px;">
+              {{ store.executionResult.status }}
+            </el-tag>
+            <span style="margin-right: 20px;"><strong>Duration:</strong> {{ store.executionResult.duration }} ms</span>
+            <span v-if="store.executionResult.statusCode"><strong>Status Code:</strong> {{ store.executionResult.statusCode }}</span>
+          </div>
 
-          <h3>Request</h3>
-          <monaco-editor :model-value="JSON.stringify(store.executionResult.request || {}, null, 2)" language="json" read-only height="200px" />
+          <el-divider />
 
-          <h3>Response</h3>
-          <monaco-editor :model-value="JSON.stringify(store.executionResult.response || {}, null, 2)" language="json" read-only height="300px" />
-          
+          <div v-if="store.executionResult.message" class="result-message">
+            <h3>Message</h3>
+            <p>{{ store.executionResult.message }}</p>
+          </div>
+
+          <div v-if="store.executionResult.detail" class="result-detail">
+            <h3>Detail</h3>
+            <pre>{{ store.executionResult.detail }}</pre>
+          </div>
+
           <h3>Step Execution Details</h3>
-          <el-collapse v-if="store.executionResult.logs && store.executionResult.logs.length > 0">
+          <el-collapse v-if="store.executionResult.logs && store.executionResult.logs.length > 0" accordion>
             <el-collapse-item v-for="(log, index) in store.executionResult.logs" :key="index" :name="index">
               <template #title>
                 <div class="log-title">
-                  <el-tag size="small" :type="log.responseStatus >= 200 && log.responseStatus < 300 ? 'success' : 'danger'" style="margin-right: 10px;">
+                  <el-tag size="small" :type="log.responseStatus >= 200 && log.responseStatus < 300 ? 'success' : (log.responseStatus === 0 ? 'warning' : 'danger')" style="margin-right: 10px;">
                     {{ log.responseStatus || 'ERR' }}
                   </el-tag>
-                  <span style="font-weight: bold;">{{ log.stepName }}</span>
-                  <span style="margin-left: 10px; color: #909399; font-size: 12px;">{{ log.requestUrl }}</span>
+                  <span style="font-weight: bold;">{{ log.stepName || `Step ${index + 1}` }}</span>
+                  <span style="margin-left: 10px; color: #909399; font-size: 12px;">{{ log.requestUrl || 'N/A' }}</span>
                 </div>
               </template>
               
               <el-tabs type="card">
                 <el-tab-pane label="Request">
                   <div class="log-detail-item">
+                     <h4>URL</h4>
+                     <pre>{{ log.requestUrl || 'N/A' }}</pre>
+                  </div>
+                  <div class="log-detail-item">
                      <h4>Headers</h4>
-                     <monaco-editor :model-value="log.requestHeaders || '{}'" language="json" read-only height="150px" />
+                     <monaco-editor :model-value="formatJson(log.requestHeaders)" language="json" read-only height="150px" :show-toolbar="true" />
                   </div>
                   <div class="log-detail-item">
                      <h4>Body</h4>
-                     <monaco-editor :model-value="log.requestBody || ''" language="json" read-only height="150px" />
+                     <monaco-editor :model-value="log.requestBody || ''" language="json" read-only height="150px" :show-toolbar="true" />
                   </div>
                 </el-tab-pane>
                 <el-tab-pane label="Response">
                   <div class="log-detail-item">
+                     <h4>Status Code</h4>
+                     <el-tag :type="log.responseStatus >= 200 && log.responseStatus < 300 ? 'success' : (log.responseStatus === 0 ? 'warning' : 'danger')">
+                       {{ log.responseStatus || 'N/A' }}
+                     </el-tag>
+                  </div>
+                  <div class="log-detail-item">
                      <h4>Headers</h4>
-                     <monaco-editor :model-value="log.responseHeaders || '{}'" language="json" read-only height="150px" />
+                     <monaco-editor :model-value="formatJson(log.responseHeaders)" language="json" read-only height="150px" :show-toolbar="true" />
                   </div>
                   <div class="log-detail-item">
                      <h4>Body</h4>
-                     <monaco-editor :model-value="log.responseBody || ''" language="json" read-only height="200px" />
+                     <monaco-editor :model-value="log.responseBody || ''" language="json" read-only height="200px" :show-toolbar="true" />
                   </div>
                 </el-tab-pane>
-                <el-tab-pane label="Variables">
-                  <monaco-editor :model-value="log.variableSnapshot || '{}'" language="json" read-only height="300px" />
+                <el-tab-pane label="Extractors" v-if="log.extractors && log.extractors.length > 0">
+                  <el-table :data="log.extractors" border>
+                    <el-table-column prop="type" label="Type" width="100" />
+                    <el-table-column prop="expression" label="Expression" />
+                    <el-table-column prop="variableName" label="Variable" />
+                    <el-table-column prop="value" label="Extracted Value" show-overflow-tooltip />
+                  </el-table>
+                </el-tab-pane>
+                <el-tab-pane label="Assertions" v-if="log.assertions && log.assertions.length > 0">
+                  <el-table :data="log.assertions" border>
+                    <el-table-column prop="type" label="Type" width="100" />
+                    <el-table-column prop="expression" label="Expression" />
+                    <el-table-column prop="expectedValue" label="Expected" />
+                    <el-table-column prop="actualValue" label="Actual" />
+                    <el-table-column prop="passed" label="Result">
+                      <template #default="{ row }">
+                        <el-tag :type="row.passed ? 'success' : 'danger'">
+                          {{ row.passed ? 'PASS' : 'FAIL' }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                  </el-table>
                 </el-tab-pane>
               </el-tabs>
             </el-collapse-item>
           </el-collapse>
-          <div v-else>
-             <pre>{{ store.executionResult.detail }}</pre>
+          <div v-else class="no-logs">
+            <el-empty description="No step execution logs available" />
           </div>
         </div>
       </div>
@@ -280,6 +312,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, View, VideoPlay, Check, Link, DocumentCopy } from '@element-plus/icons-vue'
 import { useTestCaseStore } from '../stores/testCaseStore'
 import { projectApi } from '../api/project'
 import { testModuleApi } from '../api/testModule'
@@ -318,6 +351,7 @@ const templateSearch = ref('')
 const showCurlDialog = ref(false)
 const curlCommand = ref('')
 const importingCurl = ref(false)
+const curlPlaceholder = "curl -X POST 'https://api.example.com/users' -H 'Content-Type: application/json' -d '{\"name\":\"test\"}'"
 
 const openLibrary = async () => {
     showLibraryDrawer.value = true
@@ -355,34 +389,61 @@ const handleImportCurl = async () => {
         return
     }
     
-    if (!store.currentCase.projectId) {
-        ElMessage.warning('Please select a project first')
-        showCurlDialog.value = false
-        activeTab.value = 'settings'
-        return
-    }
-    
+    // No validation for project and module here - will be validated on save
     importingCurl.value = true
     try {
+        // Always use parseOnly mode - just parse and fill the form, don't create case
+        // User needs to click Save button to actually save the case
+        // Pass null for projectId and moduleId since we're just parsing
         const result = await importApi.importCurl(
-            store.currentCase.projectId,
-            store.currentCase.moduleId,
+            null, // projectId - not needed for parsing
+            null, // moduleId - not needed for parsing
             curlCommand.value,
-            false, // asStep = false, import as case settings
-            null
+            false, // asStep = false
+            null,
+            true // parseOnly = true, just parse and return data
         )
         
         // Update current case with parsed data
-        if (result.data) {
+        // When parseOnly=true, the response structure is: { method, url, headers, body } at root level
+        if (result.method) {
+            // Data is at root level (parseOnly mode)
+            store.currentCase.method = result.method || store.currentCase.method
+            store.currentCase.url = result.url || store.currentCase.url
+            store.currentCase.headers = result.headers || store.currentCase.headers || '{}'
+            store.currentCase.body = result.body != null ? result.body : ''
+            
+            // If case name is empty, set a default name
+            if (!store.currentCase.caseName || store.currentCase.caseName.trim() === '') {
+                const urlParts = result.url.split('/').filter(p => p)
+                const lastPart = urlParts[urlParts.length - 1] || 'Imported Case'
+                store.currentCase.caseName = `${result.method} ${lastPart}`
+            }
+            
+            ElMessage.success('cURL imported successfully. Please review and click Save to save the case.')
+        } else if (result.data && result.data.method) {
+            // Fallback: Data is nested in result.data
             store.currentCase.method = result.data.method || store.currentCase.method
             store.currentCase.url = result.data.url || store.currentCase.url
             store.currentCase.headers = result.data.headers || store.currentCase.headers || '{}'
-            store.currentCase.body = result.data.body || store.currentCase.body || ''
+            store.currentCase.body = result.data.body != null ? result.data.body : ''
             
-            ElMessage.success('cURL imported successfully')
-            showCurlDialog.value = false
-            curlCommand.value = ''
+            // If case name is empty, set a default name
+            if (!store.currentCase.caseName || store.currentCase.caseName.trim() === '') {
+                const urlParts = result.data.url.split('/').filter(p => p)
+                const lastPart = urlParts[urlParts.length - 1] || 'Imported Case'
+                store.currentCase.caseName = `${result.data.method} ${lastPart}`
+            }
+            
+            ElMessage.success('cURL imported successfully. Please review and click Save to save the case.')
+        } else {
+            ElMessage.warning('cURL parsed but no data returned')
         }
+        
+        showCurlDialog.value = false
+        curlCommand.value = ''
+        // Switch to settings tab to show the imported data
+        activeTab.value = 'settings'
     } catch (error) {
         ElMessage.error('Failed to import cURL: ' + (error.response?.data?.error || error.message))
     } finally {
@@ -392,6 +453,16 @@ const handleImportCurl = async () => {
 
 const resultTitle = computed(() => isDryRun.value ? 'Dry Run Result' : 'Execution Result')
 const isDryRunResult = computed(() => isDryRun.value)
+
+const formatJson = (str) => {
+  if (!str) return '{}'
+  try {
+    const parsed = typeof str === 'string' ? JSON.parse(str) : str
+    return JSON.stringify(parsed, null, 2)
+  } catch (e) {
+    return str
+  }
+}
 
 const currentStep = computed({
   get: () => selectedStepIndex.value >= 0 ? store.currentCase.steps[selectedStepIndex.value] : null,
@@ -507,16 +578,16 @@ const handleSave = async () => {
       activeTab.value = 'settings'
       return
     }
+    // Validate project and module - required for saving
+    if (!store.currentCase.projectId) {
+      ElMessage.warning('Please select a project')
+      activeTab.value = 'settings'
+      return
+    }
     if (!store.currentCase.moduleId) {
       ElMessage.warning('Please select a module')
       activeTab.value = 'settings'
       return
-    }
-    
-    // Prepare payload with proper structure
-    const payload = {
-      ...store.currentCase,
-      module: { id: store.currentCase.moduleId }
     }
     
     await store.saveCase()
@@ -527,6 +598,7 @@ const handleSave = async () => {
     }
   } catch (error) {
     console.error('Save failed:', error)
+    ElMessage.error('Failed to save test case: ' + (error.response?.data?.message || error.message))
   }
 }
 
@@ -626,11 +698,54 @@ onMounted(() => {
   padding: 20px;
 }
 
+.result-summary {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.result-message,
+.result-detail {
+  margin-bottom: 20px;
+}
+
+.result-message h3,
+.result-detail h3 {
+  margin-bottom: 10px;
+  color: #303133;
+}
+
 .result-content pre {
   background-color: #f5f7fa;
   padding: 10px;
   border-radius: 4px;
   overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.log-title {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.log-detail-item {
+  margin-bottom: 20px;
+}
+
+.log-detail-item h4 {
+  margin-bottom: 10px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.no-logs {
+  padding: 40px;
+  text-align: center;
 }
 
 .help-text {

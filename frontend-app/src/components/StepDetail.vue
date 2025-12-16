@@ -230,12 +230,13 @@ watch(() => props.modelValue, async (val) => {
     if (step.value.referenceCaseId) {
       stepType.value = 'reference'
       await loadReferenceCase(step.value.referenceCaseId)
+      // Only load available cases when step type is reference
+      await loadAvailableCases()
     } else {
       stepType.value = 'custom'
+      // Don't load cases for custom steps to avoid unnecessary API calls
+      availableCases.value = []
     }
-    
-    // Load available cases for reference selection
-    await loadAvailableCases()
   } else {
     step.value = null
     assertions.value = []
@@ -289,7 +290,23 @@ watch([step, assertions, extractors], () => {
       
       extractors.value.forEach(e => {
         if (e.source === 'json' && e.variable) {
-          script += `vars.put("${e.variable}", jsonPath(response, "${e.expression}"))\n`
+          // Remove $ prefix and ${} wrapper from variable name if present
+          let varName = e.variable.trim()
+          // Remove ${} wrapper: ${token} -> token
+          if (varName.startsWith('${') && varName.endsWith('}')) {
+            varName = varName.substring(2, varName.length - 1)
+          }
+          // Remove {token} wrapper (without $): {token} -> token
+          else if (varName.startsWith('{') && varName.endsWith('}')) {
+            varName = varName.substring(1, varName.length - 1)
+          }
+          // Remove $ prefix: $token -> token
+          else if (varName.startsWith('$')) {
+            varName = varName.substring(1)
+          }
+          // Use single quotes for JSONPath expression to avoid GString interpolation
+          // Single quotes in Groovy are literal strings, so $ won't be interpreted
+          script += `vars.put("${varName}", jsonPath(response, '${e.expression}'))\n`
         }
       })
       
@@ -310,11 +327,27 @@ const debounceEmit = () => {
   }, 300)
 }
 
+// Cache for available cases to avoid repeated API calls
+let casesCache = null
+let casesCacheTime = 0
+const CACHE_DURATION = 60000 // 1 minute cache
+
 const loadAvailableCases = async () => {
   try {
+    // Use cache if available and not expired
+    const now = Date.now()
+    if (casesCache && (now - casesCacheTime) < CACHE_DURATION) {
+      availableCases.value = casesCache
+      return
+    }
+    
     // Load all test cases for reference selection
     // In the future, we could filter by current project/module
-    availableCases.value = await testCaseApi.getAll()
+    const cases = await testCaseApi.getAll()
+    availableCases.value = cases
+    // Update cache
+    casesCache = cases
+    casesCacheTime = now
   } catch (error) {
     console.error('Failed to load test cases for reference:', error)
     availableCases.value = []
@@ -337,10 +370,14 @@ const handleStepTypeChange = (type) => {
     step.value.method = 'GET'
     step.value.body = ''
     step.value.headers = '{}'
+    // Load available cases only when switching to reference type
+    loadAvailableCases()
   } else {
     // Clear reference when switching to custom
     step.value.referenceCaseId = null
     selectedReferenceCase.value = null
+    // Clear available cases to avoid unnecessary data
+    availableCases.value = []
   }
   debounceEmit()
 }

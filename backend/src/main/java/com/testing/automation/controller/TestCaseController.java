@@ -36,6 +36,16 @@ public class TestCaseController {
      */
     @PostMapping
     public ResponseEntity<TestCase> createCase(@RequestBody TestCase newCase) {
+        // Extract moduleId from nested module object if present
+        if (newCase.getModuleId() == null && newCase.getModule() != null && newCase.getModule().getId() != null) {
+            newCase.setModuleId(newCase.getModule().getId());
+        }
+        
+        // Validate moduleId is present
+        if (newCase.getModuleId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
         // Fix bidirectional relationship: set testCase reference in each step
         if (newCase.getSteps() != null) {
             for (TestStep step : newCase.getSteps()) {
@@ -91,7 +101,18 @@ public class TestCaseController {
         existingCase.setSetupScript(updatedCase.getSetupScript());
         existingCase.setAssertionScript(updatedCase.getAssertionScript());
         existingCase.setIsActive(updatedCase.getIsActive());
-        existingCase.setModuleId(updatedCase.getModuleId()); // Updated to use ID
+        
+        // Extract moduleId from nested module object if present, or use direct moduleId
+        if (updatedCase.getModule() != null && updatedCase.getModule().getId() != null) {
+            existingCase.setModuleId(updatedCase.getModule().getId());
+        } else if (updatedCase.getModuleId() != null) {
+            existingCase.setModuleId(updatedCase.getModuleId());
+        }
+        
+        // Validate moduleId is present
+        if (existingCase.getModuleId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         // Handle steps update with proper bidirectional relationship
         if (updatedCase.getSteps() != null) {

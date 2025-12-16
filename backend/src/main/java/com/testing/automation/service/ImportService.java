@@ -224,6 +224,16 @@ public class ImportService {
     }
 
     /**
+     * Parse cURL command and return parsed data (without creating database records)
+     * 
+     * @param curlCommand cURL command string
+     * @return CurlParseResult with method, url, headers, and body
+     */
+    public CurlParser.CurlParseResult parseCurl(String curlCommand) {
+        return CurlParser.parse(curlCommand);
+    }
+    
+    /**
      * Import test case or step from cURL command
      * 
      * @param projectId Project ID
@@ -247,6 +257,7 @@ public class ImportService {
                 step.setUrl(parsed.getUrl());
                 step.setHeaders(parsed.getHeadersAsJson());
                 step.setBody(parsed.getBody());
+                step.setAssertionScript(""); // Set default empty assertion script
                 step.setEnabled(true);
                 
                 // Get max step order
@@ -286,6 +297,7 @@ public class ImportService {
                 testCase.setUrl(parsed.getUrl());
                 testCase.setHeaders(parsed.getHeadersAsJson());
                 testCase.setBody(parsed.getBody());
+                testCase.setAssertionScript(""); // Set default empty assertion script
                 testCase.setIsActive(true);
                 testCase.setCreatedAt(LocalDateTime.now());
                 testCase.setUpdatedAt(LocalDateTime.now());

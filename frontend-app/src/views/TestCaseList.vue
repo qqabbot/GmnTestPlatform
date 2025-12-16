@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>Test Cases</span>
-          <el-button type="primary" @click="$router.push('/testing/cases/new')">
+          <el-button type="primary" @click="handleNewCase">
             <el-icon><Plus /></el-icon>
             New Case
           </el-button>
@@ -58,7 +58,7 @@
               type="primary"
               size="small"
               text
-              @click="$router.push(`/testing/cases/${row.id}/edit`)"
+              @click="router.push(`/testing/cases/${row.id}/edit`)"
             >
               <el-icon><Edit /></el-icon>
             </el-button>
@@ -73,6 +73,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <!-- Pagination -->
+      <div class="pagination-container" style="margin-top: 20px; display: flex; justify-content: flex-end;">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="totalCases"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="handlePageChange"
+          @size-change="pageSize = $event; currentPage = 1"
+        />
+      </div>
     </el-card>
 
     <!-- Edit Dialog -->
@@ -150,11 +163,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
 import { testCaseApi } from '../api/testCase'
 import { testModuleApi } from '../api/testModule'
 import { projectApi } from '../api/project'
+
+const router = useRouter()
 
 const loading = ref(false)
 const showDialog = ref(false)
@@ -164,6 +181,11 @@ const selectedModuleId = ref(null)
 const cases = ref([])
 const modules = ref([])
 const projects = ref([])
+
+// Pagination
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalCases = ref(0)
 const currentCase = ref({
   caseName: '',
   projectId: null,
@@ -181,11 +203,22 @@ const dialogModules = computed(() => {
 })
 
 const filteredCases = computed(() => {
-  if (!searchText.value) return cases.value
-  return cases.value.filter(c =>
-    c.caseName.toLowerCase().includes(searchText.value.toLowerCase())
-  )
+  let filtered = cases.value
+  if (searchText.value) {
+    filtered = filtered.filter(c =>
+      c.caseName.toLowerCase().includes(searchText.value.toLowerCase())
+    )
+  }
+  totalCases.value = filtered.length
+  // Apply pagination
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filtered.slice(start, end)
 })
+
+const handlePageChange = (page) => {
+  currentPage.value = page
+}
 
 const filteredModules = computed(() => {
   if (!selectedProjectId.value) return modules.value
@@ -297,6 +330,10 @@ const deleteCase = async (id) => {
   }
 }
 
+const handleNewCase = () => {
+  router.push('/testing/cases/new')
+}
+
 const resetForm = () => {
   currentCase.value = {
     caseName: '',
@@ -309,6 +346,10 @@ const resetForm = () => {
     isActive: true
   }
 }
+
+watch([searchText, selectedProjectId, selectedModuleId], () => {
+  currentPage.value = 1 // Reset to first page when filter changes
+})
 
 onMounted(() => {
   loadProjects()

@@ -61,15 +61,15 @@
 
     <!-- Environment Dialog -->
     <el-dialog v-model="showEnvDialog" :title="editEnv.id ? 'Edit Environment' : 'New Environment'" width="400px" @close="resetEnvForm">
-      <el-form :model="editEnv.id ? editEnv : newEnv" label-width="80px">
+      <el-form :model="currentEnvForm" label-width="80px">
         <el-form-item label="Name" required>
-          <el-input v-model="editEnv.id ? editEnv.envName : newEnv.envName" placeholder="e.g., QA, Prod" />
+          <el-input v-model="currentEnvForm.envName" placeholder="e.g., QA, Prod" />
         </el-form-item>
         <el-form-item label="Domain">
-          <el-input v-model="editEnv.id ? editEnv.domain : newEnv.domain" placeholder="e.g., http://api.example.com" />
+          <el-input v-model="currentEnvForm.domain" placeholder="e.g., http://api.example.com" />
         </el-form-item>
         <el-form-item label="Desc">
-          <el-input v-model="editEnv.id ? editEnv.description : newEnv.description" type="textarea" />
+          <el-input v-model="currentEnvForm.description" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -113,8 +113,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import { environmentApi } from '../api/environment'
 import { variableApi } from '../api/variable'
 
@@ -132,6 +133,11 @@ const newEnv = ref({ envName: '', domain: '', description: '' })
 const editEnv = ref({ id: null, envName: '', domain: '', description: '' })
 const newVar = ref({ keyName: '', valueContent: '' })
 const editVar = ref({ id: null, keyName: '', valueContent: '' })
+
+// Computed property for current form (edit or new)
+const currentEnvForm = computed(() => {
+  return editEnv.value.id ? editEnv.value : newEnv.value
+})
 
 const loadEnvironments = async () => {
   loading.value = true

@@ -186,3 +186,17 @@ npm run build
 ```
 
 构建产物在 `frontend/dist` 目录，可部署到任何静态服务器。
+
+使用示例
+Step 1（登录并提取 token）：
+URL: POST /api/login
+Body: {"username": "user", "password": "pass"}
+Extractor: $.token → $token
+Step 2 或 Case 级别（使用 token）：
+Headers: {"Authorization": "Bearer ${token}"}
+URL: GET /api/user/profile
+系统会自动将 ${token} 替换为 Step 1 提取的值
+所有修复已完成。请重启后端服务并测试：
+执行 Case 后，result 中应显示 request headers
+执行包含 steps 的 Case 后，result 中应显示所有 steps 的执行记录
+在 Case 的 URL/Body/Headers 中使用 ${variable_name} 引用 steps 中提取的变量

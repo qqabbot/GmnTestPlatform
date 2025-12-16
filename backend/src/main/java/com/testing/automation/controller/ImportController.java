@@ -35,13 +35,35 @@ public class ImportController {
 
     @PostMapping("/curl")
     public ResponseEntity<Map<String, Object>> importCurl(
-            @RequestParam Long projectId,
+            @RequestParam(required = false) Long projectId,
             @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false, defaultValue = "false") boolean asStep,
             @RequestParam(required = false) Long caseId,
+            @RequestParam(required = false, defaultValue = "false") boolean parseOnly,
             @RequestBody String curlCommand) {
 
         try {
+            // If parseOnly is true, just parse and return the data without creating records
+            // projectId and moduleId are not required for parsing
+            if (parseOnly) {
+                var parseResult = importService.parseCurl(curlCommand);
+                return ResponseEntity.ok(Map.of(
+                    "message", "Successfully parsed cURL command",
+                    "method", parseResult.getMethod(),
+                    "url", parseResult.getUrl(),
+                    "headers", parseResult.getHeadersAsJson(),
+                    "body", parseResult.getBody() != null ? parseResult.getBody() : ""
+                ));
+            }
+            
+            // For non-parseOnly mode, projectId is required
+            if (projectId == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "projectId is required when creating a test case"
+                ));
+            }
+            
+            // Otherwise, create the test case or step
             Object result = importService.importFromCurl(projectId, moduleId, curlCommand, asStep, caseId);
             String type = asStep ? "step" : "case";
             return ResponseEntity.ok(Map.of(

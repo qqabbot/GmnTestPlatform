@@ -63,6 +63,11 @@ export const useTestCaseStore = defineStore('testCase', () => {
     const saveCase = async () => {
         loading.value = true
         try {
+            // Validate moduleId before saving
+            if (!currentCase.value.moduleId) {
+                throw new Error('Module is required. Please select a module before saving.')
+            }
+            
             // Prepare clean payload
             const payload = {
                 caseName: currentCase.value.caseName,
@@ -98,7 +103,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
             }
             ElMessage.success('Test case saved successfully')
         } catch (error) {
-            ElMessage.error('Failed to save test case')
+            ElMessage.error('Failed to save test case: ' + (error.message || error.response?.data?.message || 'Unknown error'))
             throw error
         } finally {
             loading.value = false
@@ -151,34 +156,16 @@ export const useTestCaseStore = defineStore('testCase', () => {
     const executeCase = async (envKey) => {
         loading.value = true
         try {
-            // Execute single case
-            // We use the batch execution API but filter for this specific case ID if possible,
-            // or we might need a specific endpoint for single case execution.
-            // For now, let's use the existing execute API with module ID and filter client-side,
-            // OR better, let's check if there is a single execution endpoint.
-            // Looking at backend, we have /execute which takes params.
-            // If we want to execute JUST this case, we might need to add a param to backend or use module scope.
-            // Wait, the requirement is "Interactive Execution".
-            // Let's assume we pass the case ID to the execute endpoint if supported, or we just run the dry run for now?
-            // No, user wants "Run".
-            // Let's use the existing execute API. It takes projectId or moduleId.
-            // If we can't filter by caseId, we might run too many.
-            // Let's check TestCaseController.java to see if it supports caseId.
-
-            // Checking backend controller...
-            // It seems it supports projectId, moduleId, or all.
-            // To run a SINGLE case, we might need to implement it or use a workaround.
-            // Workaround: Create a temporary "Single Run" logic or just use Dry Run for now?
-            // The plan said "Run Case".
-            // Let's implement a client-side filter if backend returns all? No, that's bad.
-            // Let's check if we can add caseId to the execute params.
-
-            // For this step, I will assume we can pass caseId to the execute endpoint,
-            // or I will fallback to Dry Run if not available, but label it "Run".
-            // Actually, let's just use the dry run result structure for now as it contains resolved values,
-            // but "Run" implies side effects.
-
-            // Let's try to pass caseId to the execute endpoint.
+            // For new cases (no ID yet), validate and save first
+            if (!currentCase.value.id) {
+                // Validate required fields before saving
+                if (!currentCase.value.moduleId) {
+                    throw new Error('Please select a project and module, then click Save before running the test case.')
+                }
+                await saveCase()
+            }
+            
+            // Execute single case - pass caseId to execute only this case
             const res = await testCaseApi.execute({
                 envKey,
                 caseId: currentCase.value.id
@@ -191,7 +178,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
                 ElMessage.warning('No results returned')
             }
         } catch (error) {
-            ElMessage.error('Execution failed')
+            ElMessage.error('Execution failed: ' + (error.message || error.response?.data?.message || 'Unknown error'))
         } finally {
             loading.value = false
         }

@@ -12,11 +12,8 @@ import java.util.regex.Pattern;
 public class CurlParser {
     
     private static final Pattern METHOD_PATTERN = Pattern.compile("-X\\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern URL_PATTERN = Pattern.compile("curl\\s+['\"]?([^'\"\\s]+)['\"]?|['\"](https?://[^'\"\\s]+)['\"]", Pattern.CASE_INSENSITIVE);
-    private static final Pattern HEADER_PATTERN = Pattern.compile("-H\\s+['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DATA_PATTERN = Pattern.compile("--data(?:-raw|-binary|-ascii)?\\s+['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DATA_AT_PATTERN = Pattern.compile("--data-raw\\s+['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DATA_BINARY_PATTERN = Pattern.compile("--data-binary\\s+['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern URL_PATTERN = Pattern.compile("(?:curl|--location)\\s+['\"](https?://[^'\"\\s]+)['\"]|['\"](https?://[^'\"\\s]+)['\"]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HEADER_PATTERN = Pattern.compile("(?:-H|--header)\\s+['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
     
     /**
      * Parse cURL command and extract HTTP request details
@@ -30,33 +27,47 @@ public class CurlParser {
             throw new IllegalArgumentException("cURL command cannot be empty");
         }
         
-        // Normalize: remove line breaks and extra spaces
-        String normalized = curlCommand.replaceAll("\\s+", " ").trim();
+        // Normalize: replace line continuations (backslash + newline) with space, but keep actual newlines for multiline matching
+        String normalized = curlCommand.replaceAll("\\\\\\s*\n\\s*", " ").replaceAll("\\\\\\s*\r\\s*\n\\s*", " ");
         
         CurlParseResult result = new CurlParseResult();
         
-        // Parse method (default to GET if not specified)
+        // Parse method (default to GET if not specified, but POST if --data is present)
         Matcher methodMatcher = METHOD_PATTERN.matcher(normalized);
         if (methodMatcher.find()) {
             result.setMethod(methodMatcher.group(1).toUpperCase());
+        } else if (normalized.contains("--data") || normalized.contains("--data-raw") || normalized.contains("--data-binary")) {
+            result.setMethod("POST");
         } else {
             result.setMethod("GET");
         }
         
-        // Parse URL
+        // Parse URL - look for URL after curl or --location
         Matcher urlMatcher = URL_PATTERN.matcher(normalized);
-        if (urlMatcher.find()) {
-            String url = urlMatcher.group(1) != null ? urlMatcher.group(1) : urlMatcher.group(2);
-            if (url != null) {
-                result.setUrl(url);
+        String url = null;
+        while (urlMatcher.find()) {
+            url = urlMatcher.group(1) != null ? urlMatcher.group(1) : urlMatcher.group(2);
+            if (url != null && url.startsWith("http")) {
+                break;
             }
         }
         
-        if (result.getUrl() == null || result.getUrl().isEmpty()) {
+        if (url == null || url.isEmpty()) {
+            // Fallback: try to find any URL pattern
+            Pattern fallbackUrlPattern = Pattern.compile("['\"](https?://[^'\"\\s]+)['\"]", Pattern.CASE_INSENSITIVE);
+            Matcher fallbackMatcher = fallbackUrlPattern.matcher(normalized);
+            if (fallbackMatcher.find()) {
+                url = fallbackMatcher.group(1);
+            }
+        }
+        
+        if (url == null || url.isEmpty()) {
             throw new IllegalArgumentException("Could not parse URL from cURL command");
         }
         
-        // Parse headers
+        result.setUrl(url);
+        
+        // Parse headers - support both -H and --header, handle multiline
         Map<String, String> headers = new HashMap<>();
         Matcher headerMatcher = HEADER_PATTERN.matcher(normalized);
         while (headerMatcher.find()) {
@@ -70,30 +81,67 @@ public class CurlParser {
         }
         result.setHeaders(headers);
         
-        // Parse body (check multiple patterns)
-        String body = null;
+        // Parse body (check multiple patterns) - handle multiline JSON with escaped quotes
+        String body = parseDataBody(normalized);
+        result.setBody(body);
         
-        // Try --data-raw first (most common in modern cURL)
-        Matcher dataRawMatcher = DATA_AT_PATTERN.matcher(normalized);
-        if (dataRawMatcher.find()) {
-            body = unescapeQuotes(dataRawMatcher.group(1));
-        } else {
-            // Try --data-binary
-            Matcher dataBinaryMatcher = DATA_BINARY_PATTERN.matcher(normalized);
-            if (dataBinaryMatcher.find()) {
-                body = unescapeQuotes(dataBinaryMatcher.group(1));
-            } else {
-                // Try generic --data
-                Matcher dataMatcher = DATA_PATTERN.matcher(normalized);
-                if (dataMatcher.find()) {
-                    body = unescapeQuotes(dataMatcher.group(1));
+        return result;
+    }
+    
+    /**
+     * Parse data body from cURL command, handling escaped quotes in JSON
+     */
+    private static String parseDataBody(String normalized) {
+        // Try different data patterns
+        String[] patterns = {
+            "--data-raw\\s+",
+            "--data-binary\\s+",
+            "--data-ascii\\s+",
+            "--data\\s+"
+        };
+        
+        for (String patternPrefix : patterns) {
+            Pattern pattern = Pattern.compile(patternPrefix, Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(normalized);
+            
+            if (matcher.find()) {
+                int startPos = matcher.end();
+                
+                // Find the opening quote (single or double)
+                if (startPos >= normalized.length()) continue;
+                
+                char quoteChar = normalized.charAt(startPos);
+                if (quoteChar != '\'' && quoteChar != '"') continue;
+                
+                // Find the matching closing quote, handling escaped quotes
+                StringBuilder bodyBuilder = new StringBuilder();
+                boolean escaped = false;
+                
+                for (int i = startPos + 1; i < normalized.length(); i++) {
+                    char c = normalized.charAt(i);
+                    
+                    if (escaped) {
+                        bodyBuilder.append(c);
+                        escaped = false;
+                    } else if (c == '\\') {
+                        bodyBuilder.append(c);
+                        escaped = true;
+                    } else if (c == quoteChar) {
+                        // Found matching closing quote
+                        break;
+                    } else {
+                        bodyBuilder.append(c);
+                    }
+                }
+                
+                String body = bodyBuilder.toString();
+                if (!body.isEmpty()) {
+                    return unescapeQuotes(body);
                 }
             }
         }
         
-        result.setBody(body);
-        
-        return result;
+        return null;
     }
     
     /**
