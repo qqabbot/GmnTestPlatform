@@ -29,7 +29,7 @@
         <step-list
           v-model:steps="store.currentCase.steps"
           :selected-index="selectedStepIndex"
-          @select="selectedStepIndex = $event"
+          @select="handleStepSelect"
           @add="store.addStep"
           @remove="handleRemoveStep"
           @update-step="handleUpdateStep"
@@ -341,7 +341,7 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, View, VideoPlay, Check, Link, DocumentCopy } from '@element-plus/icons-vue'
 import { useTestCaseStore } from '../stores/testCaseStore'
@@ -576,6 +576,13 @@ const loadData = async () => {
     console.error('Failed to load initial data:', error)
     ElMessage.error('Failed to load projects and modules')
   }
+}
+
+const handleStepSelect = (index) => {
+  selectedStepIndex.value = index
+  nextTick(() => {
+    activeTab.value = 'step'
+  })
 }
 
 const loadModules = () => {

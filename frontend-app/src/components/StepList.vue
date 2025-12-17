@@ -13,7 +13,7 @@
     <draggable 
       :modelValue="steps" 
       @update:modelValue="handleUpdate"
-      :item-key="(item) => item.stepOrder || Math.random()"
+      :item-key="(item) => item.id || item.stepOrder"
       handle=".drag-handle"
       class="list-container"
       :clone="(item) => ({ ...item })"

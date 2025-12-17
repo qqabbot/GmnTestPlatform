@@ -131,61 +131,64 @@ const handleMount = async (editor, monaco) => {
   editorInstance = editor
   monacoInstance = monaco
   // 1. Configure Custom Theme for Variable Highlighting
-  monaco.editor.defineTheme('gmn-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-      { token: 'variable', foreground: '4ec9b0', fontStyle: 'bold' }
-    ],
-    colors: {}
-  })
+  // Guard to prevent re-definition (Monaco is global)
+  if (!window.__gmn_theme_registered) {
+    window.__gmn_theme_registered = true
+    monaco.editor.defineTheme('gmn-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'variable', foreground: '4ec9b0', fontStyle: 'bold' }
+      ],
+      colors: {}
+    })
+  }
 
   // 2. Set Tokenizer for Highlighting ${variable}
-  // Note: This is global for the language. 
-  // We apply it typically once. To be safe, checking if language already has our tokens is hard.
-  // Using setMonarchTokensProvider works but might conflict if library does it.
-  // For JSON, we extend it.
-  // Simplest way for 'variable' tokenization without full language redef:
-  // We can't easily extend JSON tokenizer in Monaco without redefining it.
-  // Skipping custom tokenization for now to avoid breaking JSON syntax check.
-  // Instead, rely on Generic Autocomplete.
+  // ... skipped ...
 
   // 3. Register Completion Provider
   // We register it for 'json' and 'groovy'.
   
   if (!window.__gmn_completion_registered) {
-    window.__gmn_completion_registered = true
+    window.__gmn_completion_registered = true // Set immediately to prevent race condition
     
     // Fetch variables once
     let variables = []
     try {
-      const envs = await environmentApi.getAll()
-       // Add built-in variables
-      variables.push({ label: 'base_url', insertText: '${base_url}', detail: 'Global Variable' })
-      variables.push({ label: 'timestamp', insertText: '${timestamp}', detail: 'Built-in' })
-      
-      envs.forEach(env => {
-        if (env.variables) {
-          try {
-            const vars = JSON.parse(env.variables)
-            Object.keys(vars).forEach(key => {
-              if (!variables.find(v => v.label === key)) {
-                variables.push({
-                  label: key,
-                  insertText: '${' + key + '}',
-                  detail: `Env: ${env.envName}`,
-                  kind: monaco.languages.CompletionItemKind.Variable
-                })
-              }
-            })
-          } catch (e) {}
-        }
+      // Use a timeout or background fetch to not delay editor init? 
+      // Actually we just start the fetch, the provider will use 'variables' array which fills up later.
+      environmentApi.getAll().then(envs => {
+         // Add built-in variables
+        variables.push({ label: 'base_url', insertText: '${base_url}', detail: 'Global Variable', kind: monaco.languages.CompletionItemKind.Variable })
+        variables.push({ label: 'timestamp', insertText: '${timestamp}', detail: 'Built-in', kind: monaco.languages.CompletionItemKind.Variable })
+        
+        envs.forEach(env => {
+          if (env.variables) {
+            try {
+              const vars = JSON.parse(env.variables)
+              Object.keys(vars).forEach(key => {
+                if (!variables.find(v => v.label === key)) {
+                  variables.push({
+                    label: key,
+                    insertText: '${' + key + '}',
+                    detail: `Env: ${env.envName}`,
+                    kind: monaco.languages.CompletionItemKind.Variable
+                  })
+                }
+              })
+            } catch (e) {}
+          }
+        })
+      }).catch(e => {
+        console.warn('Failed to fetch variables for Monaco', e)
       })
     } catch (e) {
-      console.warn('Failed to fetch variables for Monaco', e)
+      console.warn('Failed to initiate variable fetch', e)
     }
 
     const providerRel = (model, position) => {
+        // ... (rest of provider logic)
         const word = model.getWordUntilPosition(position);
         const range = {
             startLineNumber: position.lineNumber,
@@ -193,17 +196,6 @@ const handleMount = async (editor, monaco) => {
             startColumn: word.startColumn,
             endColumn: word.endColumn
         };
-        
-        // Trigger on $
-        // Actually monaco triggers on typing. We want to check if previous char is $
-        // Or if we just typed $.
-        const lineContent = model.getLineContent(position.lineNumber)
-        const textUntilPosition = lineContent.substring(0, position.column - 1)
-        
-        // If simply typing, show all variables?
-        // Or only if $ is typed.
-        // If user typed '$', textUntilPosition ends with '$'.
-        // If user typed '$v', textUntilPosition ends with '$v'.
         
         return {
             suggestions: variables.map(v => ({

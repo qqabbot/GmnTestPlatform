@@ -136,7 +136,7 @@
         <!-- Extractors (New) -->
         <el-tab-pane label="Extractors" name="extractors">
            <div class="list-actions">
-             <el-button type="secondary" size="small" @click="addExtractor">
+             <el-button size="small" @click="addExtractor">
                <el-icon><Plus /></el-icon> Add Extractor
              </el-button>
           </div>
@@ -231,35 +231,7 @@ const availableCases = ref([])
 const selectedReferenceCase = ref(null)
 
 // Initialize local state from prop
-watch(() => props.modelValue, async (val) => {
-  if (val) {
-    step.value = JSON.parse(JSON.stringify(val))
-    // Attempt to parse assertions/extractors from existing properties if they existed, 
-    // or just start empty. For Phase 3.2, strict persistence of UI state isn't mandatory if backend doesn't support it,
-    // but better user experience would be to save them.
-    // We will store them in `step` object as temporary fields if they exist.
-    assertions.value = step.value._ui_assertions || []
-    extractors.value = step.value._ui_extractors || []
-    
-    // Determine step type
-    if (step.value.referenceCaseId) {
-      stepType.value = 'reference'
-      await loadReferenceCase(step.value.referenceCaseId)
-      // Only load available cases when step type is reference
-      await loadAvailableCases()
-    } else {
-      stepType.value = 'custom'
-      // Don't load cases for custom steps to avoid unnecessary API calls
-      availableCases.value = []
-    }
-  } else {
-    step.value = null
-    assertions.value = []
-    extractors.value = []
-    stepType.value = 'custom'
-    selectedReferenceCase.value = null
-  }
-}, { immediate: true })
+// Watch moved to bottom
 
 // State management
 const addAssertion = () => {
@@ -277,59 +249,7 @@ const removeExtractor = (index) => {
 }
 
 // Watch for changes in UI lists and update step + emit
-watch([step, assertions, extractors], () => {
-  if (!step.value) return
-  
-  // Save UI state
-  step.value._ui_assertions = assertions.value
-  step.value._ui_extractors = extractors.value
-  
-  // Compile to assertionScript (Simple Generation)
-  // Only compile if we are NOT currently editing the script directly (or if lists are not empty)
-  // Ideally, we should have a flag "useRawScript".
-  // For now, we always compile IF there are items in the list.
-  // If list is empty, we don't overwrite, allowing manual script.
-  if (assertions.value.length > 0 || extractors.value.length > 0) {
-      let script = ""
-      
-      // Assertions
-      assertions.value.forEach(a => {
-        if (a.source === 'status') {
-          script += `assert status_code ${a.operator} ${a.expected}\n`
-        } else if (a.source === 'json') {
-          script += `assert jsonPath(response, "${a.property}") ${a.operator} "${a.expected}"\n`
-        } else if (a.source === 'header') {
-          script += `assert headers["${a.property}"] ${a.operator} "${a.expected}"\n`
-        }
-      })
-      
-      extractors.value.forEach(e => {
-        if (e.source === 'json' && e.variable) {
-          // Remove $ prefix and ${} wrapper from variable name if present
-          let varName = e.variable.trim()
-          // Remove ${} wrapper: ${token} -> token
-          if (varName.startsWith('${') && varName.endsWith('}')) {
-            varName = varName.substring(2, varName.length - 1)
-          }
-          // Remove {token} wrapper (without $): {token} -> token
-          else if (varName.startsWith('{') && varName.endsWith('}')) {
-            varName = varName.substring(1, varName.length - 1)
-          }
-          // Remove $ prefix: $token -> token
-          else if (varName.startsWith('$')) {
-            varName = varName.substring(1)
-          }
-          // Use single quotes for JSONPath expression to avoid GString interpolation
-          // Single quotes in Groovy are literal strings, so $ won't be interpreted
-          script += `vars.put("${varName}", jsonPath(response, '${e.expression}'))\n`
-        }
-      })
-      
-      step.value.assertionScript = script
-  }
-
-  debounceEmit()
-}, { deep: true })
+// Deep watcher moved to after debounceEmit
 
 let updateTimer = null
 const debounceEmit = () => {
@@ -341,6 +261,51 @@ const debounceEmit = () => {
     updateTimer = null
   }, 300)
 }
+
+// Watch for changes in UI lists and update step + emit (Moved here to ensure debounceEmit is defined)
+// Watch for UI lists changes -> Compile script + Sync UI state
+watch([assertions, extractors], () => {
+  if (!step.value) return
+  
+  // Save UI state
+  step.value._ui_assertions = assertions.value
+  step.value._ui_extractors = extractors.value
+  
+  if (assertions.value.length > 0 || extractors.value.length > 0) {
+      let script = ""
+      assertions.value.forEach(a => {
+        if (a.source === 'status') {
+          script += `assert status_code ${a.operator} ${a.expected}\n`
+        } else if (a.source === 'json') {
+          script += `assert jsonPath(response, "${a.property}") ${a.operator} "${a.expected}"\n`
+        } else if (a.source === 'header') {
+          script += `assert headers["${a.property}"] ${a.operator} "${a.expected}"\n`
+        }
+      })
+      extractors.value.forEach(e => {
+        if (e.source === 'json' && e.variable) {
+          let varName = e.variable.trim()
+          if (varName.startsWith('${') && varName.endsWith('}')) {
+            varName = varName.substring(2, varName.length - 1)
+          } else if (varName.startsWith('{') && varName.endsWith('}')) {
+            varName = varName.substring(1, varName.length - 1)
+          } else if (varName.startsWith('$')) {
+            varName = varName.substring(1)
+          }
+          script += `vars.put("${varName}", jsonPath(response, '${e.expression}'))\n`
+        }
+      })
+      step.value.assertionScript = script
+  }
+  // No emit here. The modification to 'step' will trigger the step watcher below.
+}, { deep: true })
+
+// Watch for any changes in step (including those caused by the watcher above) and emit
+watch(step, () => {
+  if (step.value && !isInitializing.value) {
+    debounceEmit()
+  }
+}, { deep: true })
 
 // Cache for available cases to avoid repeated API calls
 let casesCache = null
@@ -409,6 +374,55 @@ const handleReferenceCaseChange = async (caseId) => {
   }
   debounceEmit()
 }
+
+const isInitializing = ref(false)
+
+// Initialize local state from prop (Moved to bottom to ensure functions are defined)
+watch(() => props.modelValue, async (val) => {
+  if (val) {
+    try {
+      // Prevent infinite loop: Only update if value actually changed semantically
+      if (step.value && JSON.stringify(val) === JSON.stringify(step.value)) {
+        return
+      }
+      
+      isInitializing.value = true
+      
+      step.value = JSON.parse(JSON.stringify(val))
+      assertions.value = step.value._ui_assertions || []
+      extractors.value = step.value._ui_extractors || []
+      
+      // Determine step type
+      if (step.value.referenceCaseId) {
+        stepType.value = 'reference'
+        await loadReferenceCase(step.value.referenceCaseId)
+        // Only load available cases when step type is reference
+        await loadAvailableCases()
+      } else {
+        stepType.value = 'custom'
+        // Don't load cases for custom steps to avoid unnecessary API calls
+        availableCases.value = []
+      }
+      
+      // Use nextTick to ensure watchers have fired and completed their immediate effects before unblocking
+      setTimeout(() => {
+        isInitializing.value = false
+      }, 50)
+      
+    } catch (e) {
+      console.error('Error initializing step detail:', e)
+      step.value = null
+      isInitializing.value = false
+    }
+  } else {
+    step.value = null
+    assertions.value = []
+    extractors.value = []
+    stepType.value = 'custom'
+    selectedReferenceCase.value = null
+    isInitializing.value = false
+  }
+}, { immediate: true })
 
 </script>
 
