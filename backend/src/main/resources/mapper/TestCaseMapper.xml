@@ -68,11 +68,11 @@
             
             te.id as extractor_id, te.step_id, te.type as extractor_type, te.variable_name, te.expression, te.created_at as extractor_created_at,
             
-            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.source, ta.property, ta.operator, ta.expected_value, ta.created_at as assertion_created_at
+            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.expression as assertion_expression, ta.expected_value, ta.created_at as assertion_created_at
         FROM test_case tc
         LEFT JOIN test_step ts ON tc.id = ts.case_id
-        LEFT JOIN test_extractor te ON ts.id = te.step_id
-        LEFT JOIN test_assertion ta ON ts.id = ta.step_id
+        LEFT JOIN extractor te ON ts.id = te.step_id
+        LEFT JOIN assertion ta ON ts.id = ta.step_id
         ORDER BY tc.id DESC, ts.step_order ASC
     </select>
     
@@ -88,11 +88,11 @@
             
             te.id as extractor_id, te.step_id, te.type as extractor_type, te.variable_name, te.expression, te.created_at as extractor_created_at,
             
-            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.source, ta.property, ta.operator, ta.expected_value, ta.created_at as assertion_created_at
+            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.expression as assertion_expression, ta.expected_value, ta.created_at as assertion_created_at
         FROM test_case tc
         LEFT JOIN test_step ts ON tc.id = ts.case_id
-        LEFT JOIN test_extractor te ON ts.id = te.step_id
-        LEFT JOIN test_assertion ta ON ts.id = ta.step_id
+        LEFT JOIN extractor te ON ts.id = te.step_id
+        LEFT JOIN assertion ta ON ts.id = ta.step_id
         WHERE tc.module_id = #{moduleId}
         ORDER BY tc.id DESC, ts.step_order ASC
     </select>
@@ -109,11 +109,11 @@
             
             te.id as extractor_id, te.step_id, te.type as extractor_type, te.variable_name, te.expression, te.created_at as extractor_created_at,
             
-            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.source, ta.property, ta.operator, ta.expected_value, ta.created_at as assertion_created_at
+            ta.id as assertion_id, ta.step_id, ta.type as assertion_type, ta.expression as assertion_expression, ta.expected_value, ta.created_at as assertion_created_at
         FROM test_case tc
         LEFT JOIN test_step ts ON tc.id = ts.case_id
-        LEFT JOIN test_extractor te ON ts.id = te.step_id
-        LEFT JOIN test_assertion ta ON ts.id = ta.step_id
+        LEFT JOIN extractor te ON ts.id = te.step_id
+        LEFT JOIN assertion ta ON ts.id = ta.step_id
         WHERE tc.id = #{id}
         ORDER BY ts.step_order ASC
     </select>

@@ -44,7 +44,7 @@ public class TestPlanService {
         List<Long> caseIds = planMapper.findCaseIdsByPlanId(id);
         List<TestCase> testCases = new ArrayList<>();
         for (Long caseId : caseIds) {
-            TestCase testCase = caseMapper.findById(caseId);
+            TestCase testCase = caseMapper.findByIdWithDetails(caseId);
             if (testCase != null) {
                 testCases.add(testCase);
             }

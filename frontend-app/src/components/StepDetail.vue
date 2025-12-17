@@ -177,6 +177,21 @@
         
         <!-- Script (Raw) -->
         <el-tab-pane label="Script" name="script">
+           <div style="margin-bottom: 5px;">
+             <el-alert type="success" :closable="false" show-icon>
+               <template #title>
+                 <b>Groovy Script Examples:</b>
+               </template>
+               <template #default>
+                 <pre style="margin: 5px 0; font-family: monospace; background: #f4f4f5; padding: 5px; border-radius: 4px;">// Assertions
+assert status_code == 200
+assert jsonPath(response, "$.data.id") != null
+
+// Extractor (Save to variable)
+vars.put("new_token", jsonPath(response, "$.token"))</pre>
+               </template>
+             </el-alert>
+           </div>
            <monaco-editor v-model="step.assertionScript" language="groovy" height="400px" />
            <div class="help-text">
              Groovy script for advanced assertions and variable extraction.<br>

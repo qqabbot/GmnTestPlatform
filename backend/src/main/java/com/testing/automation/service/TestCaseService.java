@@ -918,9 +918,10 @@ public class TestCaseService {
             // If result is not null and not false, consider it successful
             System.out.println("Assertion script returned non-boolean: " + result + ", treating as success");
             return result != null;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             System.err.println("Assertion execution failed: " + e.getMessage());
-            e.printStackTrace();
+            // e.printStackTrace(); // Optional: reduce log noise for expected assertion
+            // failures
             return false;
         }
     }

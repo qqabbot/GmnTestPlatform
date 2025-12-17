@@ -99,7 +99,38 @@
                 
                 <el-divider />
                 
+                <el-divider />
+
+                <el-form-item label="Pre-request Script">
+                   <div style="margin-bottom: 5px; width: 100%;">
+                    <el-alert type="info" :closable="false" show-icon>
+                      <template #title>
+                        Run before request. <b>Variables Fallback Pattern:</b>
+                      </template>
+                      <template #default>
+                        <pre style="margin: 5px 0; font-family: monospace; background: #f4f4f5; padding: 5px; border-radius: 4px;">if (!vars.containsKey("userId")) {
+    vars.put("userId", "123456") // Default value for standalone execution
+}</pre>
+                      </template>
+                    </el-alert>
+                  </div>
+                  <monaco-editor v-model="store.currentCase.setupScript" language="groovy" height="200px" />
+                </el-form-item>
+
                 <el-form-item label="Global Assertion">
+                  <div style="margin-bottom: 5px; width: 100%;">
+                    <el-alert type="success" :closable="false" show-icon>
+                      <template #title>
+                        Run after request. <b>Groovy Examples:</b>
+                      </template>
+                      <template #default>
+                        <pre style="margin: 5px 0; font-family: monospace; background: #f4f4f5; padding: 5px; border-radius: 4px;">assert status_code == 200
+assert jsonPath(response, "$.code") == "200"
+// Extract variable for next steps
+vars.put("token", jsonPath(response, "$.data.token"))</pre>
+                      </template>
+                    </el-alert>
+                  </div>
                   <monaco-editor v-model="store.currentCase.assertionScript" language="groovy" height="200px" />
                   <div class="help-text">Groovy script for assertions (e.g., status_code == 200)</div>
                 </el-form-item>
