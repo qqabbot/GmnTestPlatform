@@ -27,4 +27,8 @@ public class TestCase {
     private LocalDateTime updatedAt = LocalDateTime.now();
     @JsonIgnoreProperties("testCase")
     private List<TestStep> steps = new ArrayList<>();
+
+    // Transient field for Test Plan execution context (not stored in test_case
+    // table)
+    private String parameterOverrides;
 }

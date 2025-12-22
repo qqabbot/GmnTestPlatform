@@ -29,8 +29,25 @@
 
       <!-- Logs/Details -->
       <div class="detail-section">
-        <h3>Execution Log</h3>
+        <div class="section-header">
+          <h3>Execution Log</h3>
+          <el-button 
+            v-if="report.status !== 'PASS'" 
+            type="warning" 
+            size="small" 
+            @click="handleDiagnose" 
+            :loading="diagnosing"
+          >
+            <el-icon><MagicStick /></el-icon> AI Diagnose
+          </el-button>
+        </div>
         <pre class="log-block">{{ report.detail }}</pre>
+      </div>
+
+      <!-- AI Diagnosis Result -->
+      <div v-if="aiDiagnosis" class="detail-section ai-diagnosis">
+        <h3><el-icon><MagicStick /></el-icon> AI Analysis</h3>
+        <div class="ai-content">{{ aiDiagnosis }}</div>
       </div>
 
       <!-- Request/Response (Placeholder if data available) -->
@@ -50,10 +67,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { ElMessage } from 'element-plus'
+import { MagicStick, Download } from '@element-plus/icons-vue'
+import { aiApi } from '../api/ai'
 
 const props = defineProps({
   visible: {
@@ -68,6 +87,30 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible'])
 const exporting = ref(false)
+const diagnosing = ref(false)
+const aiDiagnosis = ref('')
+
+watch(() => props.visible, (newVal) => {
+  if (newVal) {
+    aiDiagnosis.value = ''
+  }
+})
+
+const handleDiagnose = async () => {
+  diagnosing.value = true
+  aiDiagnosis.value = ''
+  try {
+    const result = await aiApi.diagnose({
+      caseName: props.report.caseName,
+      logs: props.report.detail
+    })
+    aiDiagnosis.value = result
+  } catch (error) {
+    ElMessage.error('AI Diagnosis failed: ' + (error.response?.data?.error || error.message))
+  } finally {
+    diagnosing.value = false
+  }
+}
 
 const exportPDF = async () => {
   exporting.value = true
@@ -142,5 +185,33 @@ const exportPDF = async () => {
   overflow-x: auto;
   font-family: 'Consolas', 'Monaco', monospace;
   white-space: pre-wrap;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ai-diagnosis {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #e6a23c;
+  border-radius: 4px;
+  background-color: #fdf6ec;
+}
+
+.ai-diagnosis h3 {
+  color: #e6a23c;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-content {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: #606266;
 }
 </style>

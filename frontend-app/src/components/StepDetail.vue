@@ -73,6 +73,17 @@
 
         <!-- Body -->
         <el-tab-pane label="Body" name="body">
+          <div class="section-header" style="margin-bottom: 10px; display: flex; justify-content: flex-end;">
+            <el-button 
+              type="warning" 
+              size="small" 
+              link 
+              @click="handleMockBody"
+              :loading="mockingBody"
+            >
+              <el-icon><MagicStick /></el-icon> AI Mock Body
+            </el-button>
+          </div>
           <monaco-editor
             v-model="step.body"
             language="json"
@@ -208,10 +219,13 @@ vars.put("new_token", jsonPath(response, "$.token"))</pre>
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import MonacoEditor from './MonacoEditor.vue'
 import VariableInput from './VariableInput.vue'
 import { testCaseApi } from '../api/testCase'
+import { aiApi } from '../api/ai'
+import { MagicStick, Plus, Delete, Link } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   modelValue: {
@@ -229,6 +243,28 @@ const extractors = ref([])
 const stepType = ref('custom') // 'custom' or 'reference'
 const availableCases = ref([])
 const selectedReferenceCase = ref(null)
+const mockingBody = ref(false)
+
+const handleMockBody = async () => {
+  if (!step.value.url) {
+    ElMessage.warning('Please enter a URL first')
+    return
+  }
+  mockingBody.value = true
+  try {
+    const result = await aiApi.generateMock({
+      url: step.value.url,
+      method: step.value.method,
+      description: step.value.stepName
+    })
+    step.value.body = result
+    ElMessage.success('Mock body generated')
+  } catch (error) {
+    ElMessage.error('AI Mock Generation failed: ' + error.message)
+  } finally {
+    mockingBody.value = false
+  }
+}
 
 // Initialize local state from prop
 // Watch moved to bottom
@@ -261,6 +297,13 @@ const debounceEmit = () => {
     updateTimer = null
   }, 300)
 }
+
+onUnmounted(() => {
+  if (updateTimer) {
+    clearTimeout(updateTimer)
+    updateTimer = null
+  }
+})
 
 // Watch for changes in UI lists and update step + emit (Moved here to ensure debounceEmit is defined)
 // Watch for UI lists changes -> Compile script + Sync UI state

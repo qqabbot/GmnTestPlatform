@@ -48,3 +48,10 @@ management:
     export:
       prometheus:
         enabled: true
+
+# AI Configuration
+ai:
+  gemini:
+    api-key: ${GEMINI_API_KEY:AIzaSyD-Onf62LYaxRDEbwMliUo3tw0uATrEZrE}
+    #AIzaSyD-Onf62LYaxRDEbwMliUo3tw0uATrEZrE
+    url: https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent

@@ -58,6 +58,7 @@ const props = defineProps({
 const isFullscreen = ref(false)
 let editorInstance = null
 let monacoInstance = null
+let layoutTimer = null
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -102,8 +103,10 @@ const formatCode = () => {
 const toggleFullscreen = () => {
   isFullscreen.value = !isFullscreen.value
   if (editorInstance) {
-    setTimeout(() => {
-      editorInstance.layout()
+    if (layoutTimer) clearTimeout(layoutTimer)
+    layoutTimer = setTimeout(() => {
+      if (editorInstance) editorInstance.layout()
+      layoutTimer = null
     }, 100)
   }
 }
@@ -112,8 +115,10 @@ const handleEscape = (e) => {
   if (e.key === 'Escape' && isFullscreen.value) {
     isFullscreen.value = false
     if (editorInstance) {
-      setTimeout(() => {
-        editorInstance.layout()
+      if (layoutTimer) clearTimeout(layoutTimer)
+      layoutTimer = setTimeout(() => {
+        if (editorInstance) editorInstance.layout()
+        layoutTimer = null
       }, 100)
     }
   }
@@ -125,6 +130,12 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleEscape)
+  if (layoutTimer) {
+    clearTimeout(layoutTimer)
+    layoutTimer = null
+  }
+  editorInstance = null
+  monacoInstance = null
 })
 
 const handleMount = async (editor, monaco) => {

@@ -39,73 +39,123 @@
       </el-table-column>
     </el-table>
 
-    <!-- Create/Edit Drawer -->
-    <el-drawer v-model="drawerVisible" :title="isEdit ? 'Edit Test Plan' : 'New Test Plan'" size="60%">
-      <div class="drawer-content">
-        <el-form label-width="100px">
-          <el-form-item label="Name" required>
-            <el-input v-model="currentPlan.name" />
-          </el-form-item>
-          <el-form-item label="Description">
-             <el-input type="textarea" v-model="currentPlan.description" />
-          </el-form-item>
-          <el-form-item label="Project" required>
-            <el-select v-model="currentPlan.projectId" placeholder="Select Project" @change="handleProjectChange">
-               <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
-            </el-select>
-          </el-form-item>
-          
-          <el-divider content-position="left">Test Cases Management</el-divider>
-          
-          <div class="case-manager" v-if="currentPlan.projectId">
-             <!-- Left: Available Cases -->
-             <div class="case-list-panel">
-               <h4>Available Cases</h4>
-               <el-input v-model="caseSearch" placeholder="Search..." prefix-icon="Search" size="small" style="margin-bottom: 5px;" />
-               <div class="case-list-container">
-                 <div 
-                    v-for="c in filteredAvailableCases" 
-                    :key="c.id" 
-                    class="case-item available"
-                    @click="addToPlan(c)"
-                 >
+    <!-- Create/Edit Fullscreen Dialog -->
+    <el-dialog 
+      v-model="drawerVisible" 
+      :title="isEdit ? 'Edit Test Plan' : 'New Test Plan'" 
+      fullscreen
+      class="fullscreen-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="edit-container">
+        <!-- Main Form (Top Area) -->
+        <div class="plan-form-header">
+          <el-form :inline="true" label-width="100px" size="default">
+            <el-form-item label="Plan Name" required>
+              <el-input v-model="currentPlan.name" placeholder="Enter plan name" style="width: 300px" />
+            </el-form-item>
+            <el-form-item label="Project" required>
+              <el-select v-model="currentPlan.projectId" placeholder="Select Project" @change="handleProjectChange" style="width: 200px">
+                 <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="Description">
+               <el-input v-model="currentPlan.description" placeholder="Optional description" style="width: 400px" />
+            </el-form-item>
+          </el-form>
+        </div>
+        
+        <!-- Case Manager (Main Content Area) -->
+        <div class="case-manager-fullscreen" v-if="currentPlan.projectId">
+           <!-- Left: Available Cases -->
+           <div class="case-list-panel flex-1">
+             <div class="panel-header">
+               <h4>Available Test Cases</h4>
+               <el-input 
+                 v-model="caseSearch" 
+                 placeholder="Search cases..." 
+                 prefix-icon="Search" 
+                 clearable
+                 size="default" 
+               />
+             </div>
+             <div class="case-list-container">
+               <div 
+                  v-for="c in filteredAvailableCases" 
+                  :key="c.id" 
+                  class="case-item available"
+                  @click="addToPlan(c)"
+               >
+                  <div class="case-info">
                     <span class="case-name">{{ c.caseName }}</span>
-                    <el-icon><Plus /></el-icon>
-                 </div>
-               </div>
-             </div>
-             
-             <!-- Right: Selected Cases -->
-             <div class="case-list-panel">
-               <h4>Selected Cases (In Order)</h4>
-               <div class="case-list-container">
-                  <div v-if="selectedCases.length === 0" class="empty-msg">No cases selected</div>
-                  <div 
-                    v-for="(c, index) in selectedCases" 
-                    :key="c.id + '_' + index" 
-                    class="case-item selected"
-                  >
-                     <span class="index-badge">{{ index + 1 }}</span>
-                     <span class="case-name">{{ c.caseName }}</span>
-                     <div class="actions">
-                        <el-button link size="small" @click="moveUp(index)" :disabled="index === 0"><el-icon><ArrowUp /></el-icon></el-button>
-                        <el-button link size="small" @click="moveDown(index)" :disabled="index === selectedCases.length - 1"><el-icon><ArrowDown /></el-icon></el-button>
-                        <el-button link type="danger" size="small" @click="removeFromPlan(index)"><el-icon><Close /></el-icon></el-button>
-                     </div>
+                    <span class="case-meta">{{ c.method }} {{ c.url }}</span>
                   </div>
+                  <el-button type="primary" link icon="Plus">Add</el-button>
                </div>
              </div>
-          </div>
-          <div v-else class="empty-msg">Please select a project first.</div>
-        </el-form>
+           </div>
+           
+           <!-- Right: Selected Cases -->
+           <div class="case-list-panel flex-1 selected-panel">
+             <div class="panel-header">
+               <h4>Selected Cases Sequence ({{ selectedCases.length }})</h4>
+               <div class="panel-tips">Drag to reorder or use arrows</div>
+             </div>
+             <div class="case-list-container">
+                <div v-if="selectedCases.length === 0" class="empty-msg">No cases selected for this plan.</div>
+                <div 
+                  v-for="(c, index) in selectedCases" 
+                  :key="c.id + '_' + index" 
+                  class="case-item selected"
+                >
+                   <span class="index-badge">{{ index + 1 }}</span>
+                   <div class="case-info">
+                      <span class="case-name">{{ c.caseName }}</span>
+                      <span class="case-meta" v-if="c.parameterOverrides">
+                        <el-tag size="small" type="warning" effect="plain">Overrides Set</el-tag>
+                      </span>
+                   </div>
+                   <div class="actions">
+                      <el-button link type="primary" size="small" @click="configureParams(c)" title="Parameter Overrides">
+                        <el-icon><Setting /></el-icon> Params
+                      </el-button>
+                      <el-divider direction="vertical" />
+                      <el-button link size="small" @click="moveUp(index)" :disabled="index === 0"><el-icon><ArrowUp /></el-icon></el-button>
+                      <el-button link size="small" @click="moveDown(index)" :disabled="index === selectedCases.length - 1"><el-icon><ArrowDown /></el-icon></el-button>
+                      <el-button link type="danger" size="small" @click="removeFromPlan(index)"><el-icon><Close /></el-icon></el-button>
+                   </div>
+                </div>
+             </div>
+           </div>
+        </div>
+        <div v-else class="empty-layout">
+          <el-empty description="Please select a project to manage test cases" />
+        </div>
       </div>
       <template #footer>
-        <div style="flex: auto">
-          <el-button @click="drawerVisible = false">Cancel</el-button>
-          <el-button type="primary" @click="savePlan">Save</el-button>
+        <div class="dialog-footer">
+          <el-button @click="drawerVisible = false" size="large">Discard Changes</el-button>
+          <el-button type="primary" @click="savePlan" size="large">Save Plan</el-button>
         </div>
       </template>
-    </el-drawer>
+    </el-dialog>
+
+    <!-- Parameter Config Dialog -->
+    <el-dialog v-model="paramDialogVisible" title="Parameter Overrides" width="500px">
+      <div style="margin-bottom: 10px;">
+        <el-alert title="Enter JSON to override variables for this step." type="info" :closable="false" />
+      </div>
+      <el-input 
+        v-model="currentParamOverride" 
+        type="textarea" 
+        :rows="10" 
+        placeholder='{ "key": "value" }'
+      />
+      <template #footer>
+        <el-button @click="paramDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" @click="saveParams">Confirm</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Run Dialog -->
     <el-dialog v-model="runDialogVisible" title="Run Test Plan" width="400px">
@@ -176,6 +226,11 @@ const currentRunPlan = ref(null)
 const resultDialogVisible = ref(false)
 const executionResults = ref([])
 
+// Parameter Config State
+const paramDialogVisible = ref(false)
+const currentParamOverride = ref('')
+const currentEditingCase = ref(null)
+
 onMounted(async () => {
     loadData()
 })
@@ -231,7 +286,11 @@ const openEditDialog = async (plan) => {
     }
     
     // Load selected cases from plan (plan.testCases is available from list API? Yes, EAGER/default)
-    selectedCases.value = plan.testCases ? [...plan.testCases] : []
+    // Ensure parameterOverrides is preserved
+    selectedCases.value = plan.testCases ? plan.testCases.map(c => ({
+        ...c,
+        parameterOverrides: c.parameterOverrides || ''
+    })) : []
     
     drawerVisible.value = true
 }
@@ -247,19 +306,6 @@ const handleProjectChange = async (newVal) => {
 
 const loadProjectCases = async (projectId) => {
     try {
-        // We assume we can fetch all cases by project. 
-        // TestCaseApi usually supports filtering by Module. 
-        // Need to support Project filtering in Backend or iterate modules here.
-        // Backend TestCaseService.executeAllCases logic implies we can find by ProjectId?
-        // Let's check TestCaseApi. If not, we might need to fetch modules first.
-        // Or create a new endpoint /api/cases?projectId=...
-        // For now, let's fetch all cases (if list is small) or fetch modules then cases.
-        // Backend `TestCaseController` getAll() doesn't seem to support projectId param filtering explicitly yet?
-        // Wait, `TestCaseService.executeAllCases` does.
-        // Let's assume for now we can get all cases and filter in frontend or use existing endpoint if any.
-        // Actually, let's look at `testCase.js`.
-        // It has `getAll(params)`. Backend `TestCaseController.getAll` might not support filtering.
-        // But `testModuleApi` can get modules by project. Then get cases by module.
         const modules = await testModuleApi.getAll({ projectId })
         let cases = []
         for (const m of modules) {
@@ -273,16 +319,50 @@ const loadProjectCases = async (projectId) => {
     }
 }
 
+const configureParams = (c) => {
+    currentEditingCase.value = c
+    // beautify json if possible
+    try {
+        if (c.parameterOverrides) {
+             const obj = JSON.parse(c.parameterOverrides)
+             currentParamOverride.value = JSON.stringify(obj, null, 2)
+        } else {
+             currentParamOverride.value = ''
+        }
+    } catch (e) {
+        currentParamOverride.value = c.parameterOverrides || ''
+    }
+    paramDialogVisible.value = true
+}
+
+const saveParams = () => {
+    // Validate JSON
+    if (currentParamOverride.value.trim()) {
+        try {
+            JSON.parse(currentParamOverride.value)
+        } catch (e) {
+             ElMessage.error('Invalid JSON format')
+             return
+        }
+    }
+    
+    // Save compressed JSON string
+    if (currentEditingCase.value) {
+        currentEditingCase.value.parameterOverrides = currentParamOverride.value
+    }
+    paramDialogVisible.value = false
+}
+
 const filteredAvailableCases = computed(() => {
     if (!caseSearch.value) return allProjectCases.value
     return allProjectCases.value.filter(c => c.caseName.toLowerCase().includes(caseSearch.value.toLowerCase()))
 })
 
 const addToPlan = (c) => {
-    // Clone to allow duplicates? Usually test suites might allow running same case twice?
-    // Let's allow duplicates for now, or just reference.
-    // If I add it, I push to selected.
-    selectedCases.value.push(c)
+    selectedCases.value.push({
+        ...c,
+        parameterOverrides: ''
+    })
 }
 
 const removeFromPlan = (index) => {
@@ -315,7 +395,10 @@ const savePlan = async () => {
     const payload = {
         ...currentPlan.value,
         project: { id: currentPlan.value.projectId },
-        testCases: selectedCases.value.map(c => ({ id: c.id }))
+        testCases: selectedCases.value.map(c => ({ 
+            id: c.id,
+            parameterOverrides: c.parameterOverrides // Send overrides
+        }))
     }
     
     try {
@@ -377,62 +460,112 @@ const executePlan = async () => {
 .filter-bar {
   margin-bottom: 20px;
 }
-.drawer-content {
-  padding: 20px;
+.edit-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
-.case-manager {
+.plan-form-header {
+  padding: 15px 20px;
+  background-color: #f5f7fa;
+  border-bottom: 1px solid #dcdfe6;
+  margin-bottom: 0px;
+}
+.case-manager-fullscreen {
   display: flex;
   gap: 20px;
-  height: 400px;
+  flex: 1;
+  padding: 20px;
+  overflow: hidden; /* Prevent body scroll */
+}
+.flex-1 {
+  flex: 1;
 }
 .case-list-panel {
-  flex: 1;
   display: flex;
   flex-direction: column;
   border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  padding: 10px;
-  background-color: #f9faFC;
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05);
+  overflow: hidden;
+}
+.panel-header {
+  padding: 15px;
+  border-bottom: 1px solid #ebeef5;
+  background-color: #fafafa;
+}
+.panel-header h4 {
+  margin: 0 0 10px 0;
+  color: #303133;
+}
+.panel-tips {
+  font-size: 12px;
+  color: #909399;
 }
 .case-list-container {
   flex: 1;
   overflow-y: auto;
-  margin-top: 10px;
+  padding: 10px;
 }
 .case-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px;
-  background: white;
+  padding: 12px;
   border-bottom: 1px solid #ebeef5;
-  cursor: pointer;
-  margin-bottom: 2px;
+  transition: all 0.2s;
 }
-.case-item.available:hover {
-  background-color: #e6f7ff;
+.case-item:hover {
+  background-color: #f0f7ff;
 }
-.case-item.selected {
-  cursor: default;
-}
-.index-badge {
-  display: inline-block;
-  width: 20px;
-  text-align: center;
-  font-size: 12px;
-  color: #909399;
-  font-weight: bold;
+.case-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 .case-name {
-  flex: 1;
-  margin-left: 5px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+.case-meta {
+  font-size: 11px;
+  color: #909399;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.empty-msg {
-  text-align: center;
-  color: #909399;
-  margin-top: 20px;
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.index-badge {
+  background-color: #409eff;
+  color: white;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  margin-right: 15px;
+}
+.selected-panel {
+  border-left: 4px solid #409eff;
+}
+.empty-layout {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dialog-footer {
+  padding: 10px 20px;
+  border-top: 1px solid #dcdfe6;
+  text-align: right;
 }
 </style>

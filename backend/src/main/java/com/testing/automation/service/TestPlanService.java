@@ -40,16 +40,35 @@ public class TestPlanService {
         if (plan == null) {
             throw new RuntimeException("Test Plan not found");
         }
-        // Load test cases from ManyToMany relationship
-        List<Long> caseIds = planMapper.findCaseIdsByPlanId(id);
-        List<TestCase> testCases = new ArrayList<>();
-        for (Long caseId : caseIds) {
-            TestCase testCase = caseMapper.findByIdWithDetails(caseId);
-            if (testCase != null) {
-                testCases.add(testCase);
+
+        // At this point, plan.getTestCases() should already be populated by MyBatis
+        // @Many.
+        // However, we need 'details' (steps, etc.) for each case which caseMapper
+        // provides.
+        // Let's merge the details into the already fetched cases to keep
+        // parameterOverrides.
+        if (plan.getTestCases() != null) {
+            for (TestCase tc : plan.getTestCases()) {
+                TestCase details = caseMapper.findByIdWithDetails(tc.getId());
+                if (details != null) {
+                    // Update details with overrides from the join table fetch
+                    // Copy basic fields but keep the overrides
+                    details.setParameterOverrides(tc.getParameterOverrides());
+                    // Replace in list or update in place?
+                    // Let's update the plan list directly if it's mutable.
+                }
+            }
+            // Actually, findCasesByPlanId already returned TestCase objects with overrides.
+            // We just need to enrich them with steps.
+            for (int i = 0; i < plan.getTestCases().size(); i++) {
+                TestCase tc = plan.getTestCases().get(i);
+                TestCase details = caseMapper.findByIdWithDetails(tc.getId());
+                if (details != null) {
+                    details.setParameterOverrides(tc.getParameterOverrides());
+                    plan.getTestCases().set(i, details);
+                }
             }
         }
-        plan.setTestCases(testCases);
         return plan;
     }
 
@@ -63,7 +82,7 @@ public class TestPlanService {
         if (plan.getTestCases() != null) {
             for (int i = 0; i < plan.getTestCases().size(); i++) {
                 TestCase testCase = plan.getTestCases().get(i);
-                planMapper.addCaseToPlan(plan.getId(), testCase.getId(), i);
+                planMapper.addCaseToPlan(plan.getId(), testCase.getId(), i, testCase.getParameterOverrides());
             }
         }
         return plan;
@@ -87,7 +106,7 @@ public class TestPlanService {
         if (updatedPlan.getTestCases() != null) {
             for (int i = 0; i < updatedPlan.getTestCases().size(); i++) {
                 TestCase testCase = updatedPlan.getTestCases().get(i);
-                planMapper.addCaseToPlan(id, testCase.getId(), i);
+                planMapper.addCaseToPlan(id, testCase.getId(), i, testCase.getParameterOverrides());
             }
         }
 
@@ -108,13 +127,42 @@ public class TestPlanService {
         List<TestResult> results = new ArrayList<>();
 
         Long projectId = plan.getProjectId();
-        Map<String, Object> runtimeVariables = globalVariableService.getVariablesMapWithInheritance(projectId, null,
+        // Base runtime variables from Environment
+        Map<String, Object> baseRuntimeVariables = globalVariableService.getVariablesMapWithInheritance(projectId, null,
                 envKey);
         Map<Long, TestResult> executionHistory = new HashMap<>();
 
         for (TestCase testCase : plan.getTestCases()) {
             try {
-                TestResult result = testCaseService.executeSingleCaseLogic(testCase, runtimeVariables,
+                // Create a COPY of runtime variables for this step to avoid polluting the
+                // global scope permanently?
+                // Step 603 analysis said: "Sequential execution context: Create a SHARED
+                // runtimeVariables Map."
+                // So we should use the same map reference.
+
+                // However, we need to inject Overrides.
+                // If overrides are specific to this step, they should effectively "put" into
+                // the map.
+                // But do they persist for subsequent steps?
+                // Usually "Input Parameters" for a step (like `id=123`) might be specific.
+                // But if they are "Global Variables" (like `token=abc`), they should persist.
+                // Let's assume they act like "Setting a variable before execution" = they
+                // persist.
+
+                if (testCase.getParameterOverrides() != null && !testCase.getParameterOverrides().isEmpty()) {
+                    try {
+                        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                        Map<String, Object> overrides = mapper.readValue(testCase.getParameterOverrides(),
+                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
+                        baseRuntimeVariables.putAll(overrides);
+                    } catch (Exception e) {
+                        System.err.println("Failed to parse parameter overrides for case " + testCase.getId() + ": "
+                                + e.getMessage());
+                    }
+                }
+
+                TestResult result = testCaseService.executeSingleCaseLogic(testCase, baseRuntimeVariables,
                         executionHistory);
                 results.add(result);
                 executionHistory.put(testCase.getId(), result);

@@ -135,6 +135,13 @@ const selectVariable = (item) => {
   // inputRef.value.focus() 
 }
 
+import { onBeforeUnmount } from 'vue'
+onBeforeUnmount(() => {
+  showSuggestions.value = false
+  suggestions.value = []
+  variables.value = []
+})
+
 </script>
 
 <style scoped>

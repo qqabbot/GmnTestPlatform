@@ -44,7 +44,7 @@ public interface TestPlanMapper {
         int deleteById(Long id);
 
         // ManyToMany relationship with TestCase
-        @Select("SELECT tc.* FROM test_case tc " +
+        @Select("SELECT tc.*, tpc.parameter_overrides AS parameterOverrides FROM test_case tc " +
                         "INNER JOIN test_plan_cases tpc ON tc.id = tpc.case_id " +
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
         List<com.testing.automation.model.TestCase> findCasesByPlanId(Long planId);
@@ -53,8 +53,10 @@ public interface TestPlanMapper {
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
         List<Long> findCaseIdsByPlanId(Long planId);
 
-        @Insert("INSERT INTO test_plan_cases (plan_id, case_id, case_order) VALUES (#{planId}, #{caseId}, #{order})")
-        int addCaseToPlan(@Param("planId") Long planId, @Param("caseId") Long caseId, @Param("order") Integer order);
+        @Insert("INSERT INTO test_plan_cases (plan_id, case_id, case_order, parameter_overrides) " +
+                        "VALUES (#{planId}, #{caseId}, #{order}, #{overrides})")
+        int addCaseToPlan(@Param("planId") Long planId, @Param("caseId") Long caseId,
+                        @Param("order") Integer order, @Param("overrides") String overrides);
 
         @Delete("DELETE FROM test_plan_cases WHERE plan_id = #{planId}")
         int removeCasesFromPlan(Long planId);

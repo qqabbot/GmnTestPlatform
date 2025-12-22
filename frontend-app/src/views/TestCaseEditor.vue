@@ -70,6 +70,9 @@
                     <el-button @click="showCurlDialog = true" size="small" type="info">
                       <el-icon><DocumentCopy /></el-icon> Import cURL
                     </el-button>
+                    <el-button @click="showAiDialog = true" size="small" type="warning">
+                      <el-icon><MagicStick /></el-icon> AI Generate
+                    </el-button>
                   </div>
                   <div class="help-text">Use ${variable_name} for variable substitution. Type $ to autocomplete. Or paste cURL command to auto-fill.</div>
                 </el-form-item>
@@ -80,8 +83,19 @@
                 </el-form-item>
                 
                 <el-form-item label="Request Body">
+                  <div class="section-header">
+                    <span class="help-text">JSON request body (for POST/PUT/PATCH methods)</span>
+                    <el-button 
+                      type="warning" 
+                      size="small" 
+                      link 
+                      @click="handleMockBody(-1)"
+                      :loading="mockingBody === -1"
+                    >
+                      <el-icon><MagicStick /></el-icon> AI Mock Body
+                    </el-button>
+                  </div>
                   <monaco-editor v-model="store.currentCase.body" language="json" height="200px" :show-toolbar="true" />
-                  <div class="help-text">JSON request body (for POST/PUT/PATCH methods)</div>
                 </el-form-item>
                 
                 <el-divider />
@@ -204,6 +218,59 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
       </template>
     </el-dialog>
 
+    <!-- AI Generate Dialog -->
+    <el-dialog v-model="showAiDialog" title="AI Generate Test Cases" width="900px" top="5vh">
+      <div v-loading="generatingAi" style="min-height: 200px;">
+        <div v-if="generatedCases.length > 0" class="ai-results">
+          <el-alert type="success" :closable="false" style="margin-bottom: 15px;">
+            AI has generated {{ generatedCases.length }} test scenarios. Select the ones you want to import.
+          </el-alert>
+          <el-table :data="generatedCases" @selection-change="handleAiSelection">
+            <el-table-column type="selection" width="55" />
+            <el-table-column prop="caseName" label="Case Name" />
+            <el-table-column prop="method" label="Method" width="100" />
+            <el-table-column prop="url" label="URL" show-overflow-tooltip />
+            <el-table-column label="Actions" width="120">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="previewAiCase(row)">Preview</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <div v-else-if="!generatingAi" class="ai-empty">
+          <p>Click "Generate" to let AI create test scenarios based on your current URL and Body.</p>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showAiDialog = false">Cancel</el-button>
+        <el-button type="warning" @click="handleAiGenerate" :loading="generatingAi">
+          {{ generatedCases.length > 0 ? 'Regenerate' : 'Generate' }}
+        </el-button>
+        <el-button type="primary" @click="importSelectedAiCases" :disabled="selectedAiCases.length === 0" :loading="importingAi">
+          Import Selected ({{ selectedAiCases.length }})
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI Preview Dialog -->
+    <el-dialog v-model="showAiPreview" title="Case Preview" width="700px" append-to-body>
+      <el-form label-width="100px" v-if="previewingCase">
+        <el-form-item label="Case Name">
+          <el-input v-model="previewingCase.caseName" />
+        </el-form-item>
+        <el-form-item label="Request">
+          <el-tag>{{ previewingCase.method }}</el-tag>
+          <span style="margin-left: 10px;">{{ previewingCase.url }}</span>
+        </el-form-item>
+        <el-form-item label="Body">
+          <monaco-editor :model-value="previewingCase.body" language="json" read-only height="150px" />
+        </el-form-item>
+        <el-form-item label="Assertion">
+          <monaco-editor :model-value="previewingCase.assertionScript" language="groovy" read-only height="150px" />
+        </el-form-item>
+      </el-form>
+    </el-dialog>
+
     <!-- Step Library Drawer -->
     <el-drawer v-model="showLibraryDrawer" title="Step Library" size="30%">
       <div class="library-content">
@@ -301,7 +368,18 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
                      <monaco-editor :model-value="formatJson(log.responseHeaders)" language="json" read-only height="150px" :show-toolbar="true" />
                   </div>
                   <div class="log-detail-item">
-                     <h4>Body</h4>
+                     <div class="section-header">
+                        <h4>Body</h4>
+                        <el-button 
+                          type="warning" 
+                          size="small" 
+                          link 
+                          @click="handleSuggestAssertions(log.responseBody, index)"
+                          :loading="suggestingAssertions === index"
+                        >
+                          <el-icon><MagicStick /></el-icon> Suggest Assertions
+                        </el-button>
+                     </div>
                      <monaco-editor :model-value="log.responseBody || ''" language="json" read-only height="200px" :show-toolbar="true" />
                   </div>
                 </el-tab-pane>
@@ -343,18 +421,20 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, View, VideoPlay, Check, Link, DocumentCopy } from '@element-plus/icons-vue'
+import { ArrowLeft, View, VideoPlay, Check, Link, DocumentCopy, MagicStick } from '@element-plus/icons-vue'
 import { useTestCaseStore } from '../stores/testCaseStore'
 import { projectApi } from '../api/project'
 import { testModuleApi } from '../api/testModule'
 import { environmentApi } from '../api/environment'
 import { stepTemplateApi } from '../api/stepTemplate'
 import { importApi } from '../api/import'
+import { aiApi } from '../api/ai'
 import StepList from '../components/StepList.vue'
 import StepDetail from '../components/StepDetail.vue'
 import MonacoEditor from '../components/MonacoEditor.vue'
 import VariableInput from '../components/VariableInput.vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { onUnmounted } from 'vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -383,6 +463,160 @@ const showCurlDialog = ref(false)
 const curlCommand = ref('')
 const importingCurl = ref(false)
 const curlPlaceholder = "curl -X POST 'https://api.example.com/users' -H 'Content-Type: application/json' -d '{\"name\":\"test\"}'"
+
+// AI State
+const showAiDialog = ref(false)
+const generatingAi = ref(false)
+const generatedCases = ref([])
+const selectedAiCases = ref([])
+const importingAi = ref(false)
+const showAiPreview = ref(false)
+const previewingCase = ref(null)
+const suggestingAssertions = ref(-1) // -1 or step index
+const mockingBody = ref(-2) // -1 for case, >=0 for step, -2 for idle
+
+const handleMockBody = async (index) => {
+    const url = index === -1 ? store.currentCase.url : store.currentCase.steps[index].url
+    const method = index === -1 ? store.currentCase.method : store.currentCase.steps[index].method
+    const name = index === -1 ? store.currentCase.caseName : store.currentCase.steps[index].stepName
+    
+    if (!url) {
+        ElMessage.warning('Please enter a URL first')
+        return
+    }
+
+    mockingBody.value = index
+    try {
+        const result = await aiApi.generateMock({
+            url,
+            method,
+            description: name
+        })
+        if (index === -1) {
+            store.currentCase.body = result
+        } else {
+            const steps = [...store.currentCase.steps]
+            steps[index].body = result
+            store.currentCase.steps = steps
+        }
+        ElMessage.success('Mock body generated')
+    } catch (error) {
+        ElMessage.error('AI Mock Generation failed: ' + error.message)
+    } finally {
+        mockingBody.value = -2
+    }
+}
+
+const handleAiGenerate = async () => {
+    ElMessage.info('Coming soon')
+    return
+    
+    /* Original implementation
+    if (!store.currentCase.url) {
+        ElMessage.warning('Please enter a URL first')
+        return
+    }
+    generatingAi.value = true
+    try {
+        const result = await aiApi.generateCases({
+            url: store.currentCase.url,
+            method: store.currentCase.method,
+            headers: store.currentCase.headers,
+            body: store.currentCase.body,
+            count: 5
+        })
+        generatedCases.value = result
+    } catch (error) {
+        ElMessage.error('AI Generation failed: ' + (error.response?.data?.error || error.message))
+    } finally {
+        generatingAi.value = false
+    }
+    */
+}
+
+const handleAiSelection = (selection) => {
+    selectedAiCases.value = selection
+}
+
+const previewAiCase = (caseObj) => {
+    previewingCase.value = caseObj
+    showAiPreview.value = true
+}
+
+const importSelectedAiCases = async () => {
+    if (!store.currentCase.projectId || !store.currentCase.moduleId) {
+        ElMessage.warning('Please select Project and Module first')
+        return
+    }
+    
+    importingAi.value = true
+    try {
+        let successCount = 0
+        for (const aiCase of selectedAiCases.value) {
+            const caseData = {
+                ...aiCase,
+                projectId: store.currentCase.projectId,
+                moduleId: store.currentCase.moduleId,
+                isActive: true
+            }
+            // Use store or API to save
+            await store.saveCaseDirectly(caseData)
+            successCount++
+        }
+        ElMessage.success(`Successfully imported ${successCount} test cases`)
+        showAiDialog.value = false
+        // Refresh module data if needed? Or just let user see them in the list.
+    } catch (error) {
+        ElMessage.error('Failed to import some cases: ' + error.message)
+    } finally {
+        importingAi.value = false
+    }
+}
+
+const handleSuggestAssertions = async (body, index) => {
+    if (!body) {
+        ElMessage.warning('No response body to analyze')
+        return
+    }
+    suggestingAssertions.value = index
+    try {
+        const result = await aiApi.suggestAssertions({ responseBody: body })
+        // We can either directly append to the script or show a dialog.
+        // For now, let's show a MessageBox with the code.
+        await ElMessageBox.confirm(
+            result,
+            'AI Suggested Assertions',
+            {
+                confirmButtonText: 'Apply to Script',
+                cancelButtonText: 'Copy to Clipboard',
+                distinguishCancelAndClose: true,
+                type: 'info',
+                customClass: 'assertion-suggestion-box'
+            }
+        ).then(() => {
+            // Apply logic
+            if (index === -1) {
+                // Case level
+                store.currentCase.assertionScript = (store.currentCase.assertionScript || '') + '\n' + result
+            } else {
+                // Step level
+                const steps = [...store.currentCase.steps]
+                steps[index].assertionScript = (steps[index].assertionScript || '') + '\n' + result
+                store.currentCase.steps = steps
+            }
+            ElMessage.success('Assertions applied')
+        }).catch((action) => {
+            if (action === 'cancel') {
+                navigator.clipboard.writeText(result)
+                ElMessage.success('Copied to clipboard')
+            }
+        })
+    } catch (error) {
+        ElMessage.error('AI Suggestion failed: ' + error.message)
+    } finally {
+        suggestingAssertions.value = -1
+    }
+}
 
 const openLibrary = async () => {
     showLibraryDrawer.value = true
@@ -419,7 +653,6 @@ const handleImportCurl = async () => {
         ElMessage.warning('Please paste a cURL command')
         return
     }
-    
     // No validation for project and module here - will be validated on save
     importingCurl.value = true
     try {
@@ -505,8 +738,8 @@ const currentStep = computed({
 })
 
 const filteredModules = computed(() => {
-  if (!store.currentCase.projectId) return []
-  return modules.value.filter(m => m.project && m.project.id === store.currentCase.projectId)
+  if (!store.currentCase.projectId || !modules.value) return []
+  return modules.value.filter(m => m.project && (typeof m.project === 'object' ? m.project.id === store.currentCase.projectId : m.project === store.currentCase.projectId))
 })
 
 watch(selectedStepIndex, (val) => {
@@ -665,6 +898,14 @@ const executeRun = async () => {
 
 onMounted(() => {
   loadData()
+})
+
+onUnmounted(() => {
+  showResult.value = false
+  showAiDialog.value = false
+  showCurlDialog.value = false
+  showLibraryDrawer.value = false
+  selectedStepIndex.value = -1
 })
 </script>
 

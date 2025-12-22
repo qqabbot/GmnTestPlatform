@@ -67,7 +67,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
             if (!currentCase.value.moduleId) {
                 throw new Error('Module is required. Please select a module before saving.')
             }
-            
+
             // Prepare clean payload
             const payload = {
                 caseName: currentCase.value.caseName,
@@ -164,7 +164,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
                 }
                 await saveCase()
             }
-            
+
             // Execute single case - pass caseId to execute only this case
             const res = await testCaseApi.execute({
                 envKey,
@@ -184,6 +184,20 @@ export const useTestCaseStore = defineStore('testCase', () => {
         }
     }
 
+    const saveCaseDirectly = async (data) => {
+        const payload = {
+            caseName: data.caseName,
+            method: data.method,
+            url: data.url,
+            headers: data.headers || '{}',
+            body: data.body || '',
+            assertionScript: data.assertionScript || '',
+            isActive: true,
+            module: { id: data.moduleId }
+        }
+        return await testCaseApi.create(payload)
+    }
+
     return {
         currentCase,
         loading,
@@ -191,6 +205,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
         resetCase,
         loadCase,
         saveCase,
+        saveCaseDirectly,
         addStep,
         removeStep,
         updateStep,

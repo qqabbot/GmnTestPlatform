@@ -34,3 +34,8 @@
 - **TestCase Editor**: Added Setup Script field and Groovy syntax helpers.
 - **Step Detail**: Added Groovy examples for Assertions and Extractors.
 - **Status**: ✅ Completed
+
+- **Status**: ✅ Completed
+ 
+ ---
+- [Phase 6.1 - Advanced Features & AI Integration](file:///Users/xhb/IdeaProjects/GmnTestPlatform/doc/task/phase6.1_tasks.md)
