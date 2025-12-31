@@ -104,8 +104,9 @@ public class TestCaseService {
         }
 
         // Save steps, extractors, and assertions
-        if (testCase.getSteps() != null && !testCase.getSteps().isEmpty()) {
-            for (TestStep step : testCase.getSteps()) {
+        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        if (effectiveSteps != null && !effectiveSteps.isEmpty()) {
+            for (TestStep step : effectiveSteps) {
                 step.setCaseId(testCase.getId());
                 step.setUpdatedAt(LocalDateTime.now());
                 if (step.getId() == null) {
@@ -166,6 +167,50 @@ public class TestCaseService {
 
     public List<TestCase> findByModuleId(Long moduleId) {
         return caseMapper.findByModuleId(moduleId);
+    }
+
+    /**
+     * 按项目ID分页查询用例
+     * 
+     * @param projectId 项目ID
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @param keyword 搜索关键词（可选）
+     * @return 包含 cases 列表和 total 总数的 Map
+     */
+    public Map<String, Object> findByProjectIdWithPagination(Long projectId, int page, int size, String keyword) {
+        // 获取项目下的所有模块
+        List<TestModule> modules = moduleMapper.findByProjectId(projectId);
+        List<Long> moduleIds = new ArrayList<>();
+        for (TestModule module : modules) {
+            moduleIds.add(module.getId());
+        }
+
+        // 如果没有模块，返回空结果
+        if (moduleIds.isEmpty()) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("cases", new ArrayList<>());
+            result.put("total", 0);
+            result.put("page", page);
+            result.put("size", size);
+            return result;
+        }
+
+        // 计算偏移量
+        int offset = page * size;
+
+        // 查询总数
+        int total = caseMapper.countByModuleIds(moduleIds, keyword);
+
+        // 查询分页数据
+        List<TestCase> cases = caseMapper.findByModuleIdsWithPagination(moduleIds, keyword, offset, size);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("cases", cases);
+        result.put("total", total);
+        result.put("page", page);
+        result.put("size", size);
+        return result;
     }
 
     @Transactional
@@ -270,7 +315,7 @@ public class TestCaseService {
         if (currentDepth > MAX_RECURSION_DEPTH) {
             return TestResult.builder()
                     .caseId(testCase.getId())
-                    .caseName(testCase.getCaseName())
+                    .caseName(testCase.getEffectiveCaseName())
                     .status("FAIL")
                     .message("Max recursion depth exceeded")
                     .detail("Circular dependency detected or nesting too deep (Max: " + MAX_RECURSION_DEPTH + ")")
@@ -286,7 +331,7 @@ public class TestCaseService {
             if (!allPassed) {
                 return TestResult.builder()
                         .caseId(testCase.getId())
-                        .caseName(testCase.getCaseName())
+                        .caseName(testCase.getEffectiveCaseName())
                         .status("SKIPPED")
                         .message("Precondition failed")
                         .detail("Precondition failed: " + testCase.getPrecondition())
@@ -307,9 +352,10 @@ public class TestCaseService {
         String finalMessage = "Success";
         String finalDetail = "Success";
 
-        if (testCase.getSteps() != null && !testCase.getSteps().isEmpty()) {
+        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        if (effectiveSteps != null && !effectiveSteps.isEmpty()) {
             // Execute Steps
-            for (TestStep step : testCase.getSteps()) {
+            for (TestStep step : effectiveSteps) {
                 if (!Boolean.TRUE.equals(step.getEnabled()))
                     continue;
 
@@ -354,7 +400,7 @@ public class TestCaseService {
                                     .body(referencedResult.getResponseBody())
                                     .headers(new HashMap<>())
                                     .build();
-                            stepUrl = "Referenced Case: " + referencedCase.getCaseName() + " (ID: "
+                            stepUrl = "Referenced Case: " + referencedCase.getEffectiveCaseName() + " (ID: "
                                     + step.getReferenceCaseId() + ")";
                             stepBody = "Executed referenced test case";
 
@@ -493,21 +539,21 @@ public class TestCaseService {
         // Execute Main Request if URL and method are provided
         // This executes after steps (if any) so that variables extracted from steps can
         // be used
-        if (testCase.getUrl() != null && !testCase.getUrl().trim().isEmpty()
-                && testCase.getMethod() != null && !testCase.getMethod().trim().isEmpty()) {
+        if (testCase.getEffectiveUrl() != null && !testCase.getEffectiveUrl().trim().isEmpty()
+                && testCase.getEffectiveMethod() != null && !testCase.getEffectiveMethod().trim().isEmpty()) {
             try {
                 // Resolve variables (including those extracted from steps)
-                String resolvedUrl = replaceVariables(testCase.getUrl(), runtimeVariables);
-                String resolvedBody = testCase.getBody() != null
-                        ? replaceVariables(testCase.getBody(), runtimeVariables)
+                String resolvedUrl = replaceVariables(testCase.getEffectiveUrl(), runtimeVariables);
+                String resolvedBody = testCase.getEffectiveBody() != null
+                        ? replaceVariables(testCase.getEffectiveBody(), runtimeVariables)
                         : null;
                 // Also replace variables in headers (including variables from steps)
-                String resolvedHeaders = testCase.getHeaders();
+                String resolvedHeaders = testCase.getEffectiveHeaders();
                 if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
                     resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                 }
 
-                lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
+                lastResponse = executeHttpRequest(testCase.getEffectiveMethod(), resolvedUrl, resolvedBody,
                         resolvedHeaders);
 
                 // Log for main request
@@ -518,7 +564,7 @@ public class TestCaseService {
                 // Set request headers (use resolved headers for display, but log original for
                 // reference)
                 log.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
-                        : (testCase.getHeaders() != null ? testCase.getHeaders() : "{}"));
+                        : (testCase.getEffectiveHeaders() != null ? testCase.getEffectiveHeaders() : "{}"));
                 // Set response headers
                 if (lastResponse.getHeaders() != null && !lastResponse.getHeaders().isEmpty()) {
                     try {
@@ -549,9 +595,9 @@ public class TestCaseService {
                 // Log failure
                 TestExecutionLog log = new TestExecutionLog();
                 log.setStepName("Main Request");
-                log.setRequestUrl(testCase.getUrl());
-                log.setRequestBody(testCase.getBody());
-                log.setRequestHeaders(testCase.getHeaders() != null ? testCase.getHeaders() : "{}");
+                log.setRequestUrl(testCase.getEffectiveUrl());
+                log.setRequestBody(testCase.getEffectiveBody());
+                log.setRequestHeaders(testCase.getEffectiveHeaders() != null ? testCase.getEffectiveHeaders() : "{}");
                 log.setResponseHeaders("{}");
                 log.setResponseStatus(0);
                 log.setResponseBody(e.getMessage());
@@ -567,12 +613,12 @@ public class TestCaseService {
 
         // Case Level Assertions (Run against last response if available)
         boolean assertionPassed = true;
-        if (allStepsPassed && lastResponse != null && testCase.getAssertionScript() != null
-                && !testCase.getAssertionScript().isEmpty()) {
-            assertionPassed = executeAssertions(testCase.getAssertionScript(), lastResponse, runtimeVariables);
+        if (allStepsPassed && lastResponse != null && testCase.getEffectiveAssertionScript() != null
+                && !testCase.getEffectiveAssertionScript().isEmpty()) {
+            assertionPassed = executeAssertions(testCase.getEffectiveAssertionScript(), lastResponse, runtimeVariables);
             if (!assertionPassed) {
                 finalMessage = "Assertion failed";
-                finalDetail = "Assertion failed. Script: " + testCase.getAssertionScript();
+                finalDetail = "Assertion failed. Script: " + testCase.getEffectiveAssertionScript();
             }
         } else if (!allStepsPassed) {
             assertionPassed = false;
@@ -582,7 +628,7 @@ public class TestCaseService {
 
         return TestResult.builder()
                 .caseId(testCase.getId())
-                .caseName(testCase.getCaseName())
+                .caseName(testCase.getEffectiveCaseName())
                 .status(status)
                 .message(finalMessage)
                 .detail(finalDetail)
@@ -697,7 +743,7 @@ public class TestCaseService {
             java.util.function.Supplier<TestResponse> baseSupplier = () -> {
                 WebClient.RequestBodySpec request = webClient
                         .method(org.springframework.http.HttpMethod.valueOf(method))
-                        .uri(url);
+                    .uri(url);
 
                 // Parse and apply headers
                 if (headers != null && !headers.trim().isEmpty()) {
@@ -713,19 +759,19 @@ public class TestCaseService {
                     }
                 }
 
-                if (body != null && !body.isEmpty()) {
-                    request.bodyValue(body);
-                }
+            if (body != null && !body.isEmpty()) {
+                request.bodyValue(body);
+            }
 
-                Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
-                        .toEntity(String.class);
-                org.springframework.http.ResponseEntity<String> response = responseMono.block();
+            Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
+                    .toEntity(String.class);
+            org.springframework.http.ResponseEntity<String> response = responseMono.block();
 
-                return TestResponse.builder()
+            return TestResponse.builder()
                         .statusCode(response.getStatusCode().value()) // Use non-deprecated API
-                        .body(response.getBody())
-                        .headers(response.getHeaders().toSingleValueMap())
-                        .build();
+                    .body(response.getBody())
+                    .headers(response.getHeaders().toSingleValueMap())
+                    .build();
             };
 
             // Apply Resilience4j decorators: CircuitBreaker first, then Retry

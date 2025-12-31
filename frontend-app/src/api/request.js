@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 
 const request = axios.create({
     baseURL: '/api',
-    timeout: 10000
+    timeout: 120000  // 120 seconds for long-running test executions
 })
 
 // Request interceptor

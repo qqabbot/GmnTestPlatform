@@ -59,6 +59,7 @@ const isFullscreen = ref(false)
 let editorInstance = null
 let monacoInstance = null
 let layoutTimer = null
+const isMounted = ref(false)
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -100,12 +101,22 @@ const formatCode = () => {
   }
 }
 
+const safeLayout = () => {
+  if (editorInstance) {
+    try {
+      editorInstance.layout()
+    } catch (e) {
+      // Ignore layout errors during unmount/resize
+    }
+  }
+}
+
 const toggleFullscreen = () => {
   isFullscreen.value = !isFullscreen.value
   if (editorInstance) {
     if (layoutTimer) clearTimeout(layoutTimer)
     layoutTimer = setTimeout(() => {
-      if (editorInstance) editorInstance.layout()
+      safeLayout()
       layoutTimer = null
     }, 100)
   }
@@ -117,7 +128,7 @@ const handleEscape = (e) => {
     if (editorInstance) {
       if (layoutTimer) clearTimeout(layoutTimer)
       layoutTimer = setTimeout(() => {
-        if (editorInstance) editorInstance.layout()
+        safeLayout()
         layoutTimer = null
       }, 100)
     }
@@ -125,16 +136,25 @@ const handleEscape = (e) => {
 }
 
 onMounted(() => {
+  isMounted.value = true
   window.addEventListener('keydown', handleEscape)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
+  isMounted.value = false
   window.removeEventListener('keydown', handleEscape)
   if (layoutTimer) {
     clearTimeout(layoutTimer)
     layoutTimer = null
   }
-  editorInstance = null
+  if (editorInstance) {
+    try {
+      editorInstance.dispose()
+    } catch (e) {
+      // Ignore disposal errors
+    }
+    editorInstance = null
+  }
   monacoInstance = null
 })
 
@@ -170,6 +190,7 @@ const handleMount = async (editor, monaco) => {
       // Use a timeout or background fetch to not delay editor init? 
       // Actually we just start the fetch, the provider will use 'variables' array which fills up later.
       environmentApi.getAll().then(envs => {
+        if (!isMounted.value) return
          // Add built-in variables
         variables.push({ label: 'base_url', insertText: '${base_url}', detail: 'Global Variable', kind: monaco.languages.CompletionItemKind.Variable })
         variables.push({ label: 'timestamp', insertText: '${timestamp}', detail: 'Built-in', kind: monaco.languages.CompletionItemKind.Variable })

@@ -36,4 +36,39 @@ public interface TestCaseMapper {
 
         @Delete("DELETE FROM test_case WHERE id = #{id}")
         int deleteById(Long id);
+
+        /**
+         * 按模块ID列表分页查询用例（支持搜索）
+         */
+        @Select("<script>" +
+                "SELECT tc.* FROM test_case tc " +
+                "WHERE tc.module_id IN " +
+                "<foreach collection='moduleIds' item='moduleId' open='(' separator=',' close=')'>" +
+                "#{moduleId}" +
+                "</foreach>" +
+                "<if test='keyword != null and keyword != \"\"'>" +
+                "AND (tc.case_name LIKE CONCAT('%', #{keyword}, '%') " +
+                "OR tc.url LIKE CONCAT('%', #{keyword}, '%'))" +
+                "</if>" +
+                "ORDER BY tc.id DESC " +
+                "LIMIT #{offset}, #{size}" +
+                "</script>")
+        List<TestCase> findByModuleIdsWithPagination(@Param("moduleIds") List<Long> moduleIds,
+                @Param("keyword") String keyword, @Param("offset") int offset, @Param("size") int size);
+
+        /**
+         * 统计按模块ID列表查询的用例总数（支持搜索）
+         */
+        @Select("<script>" +
+                "SELECT COUNT(*) FROM test_case tc " +
+                "WHERE tc.module_id IN " +
+                "<foreach collection='moduleIds' item='moduleId' open='(' separator=',' close=')'>" +
+                "#{moduleId}" +
+                "</foreach>" +
+                "<if test='keyword != null and keyword != \"\"'>" +
+                "AND (tc.case_name LIKE CONCAT('%', #{keyword}, '%') " +
+                "OR tc.url LIKE CONCAT('%', #{keyword}, '%'))" +
+                "</if>" +
+                "</script>")
+        int countByModuleIds(@Param("moduleIds") List<Long> moduleIds, @Param("keyword") String keyword);
 }

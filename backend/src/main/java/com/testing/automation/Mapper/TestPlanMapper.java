@@ -43,8 +43,18 @@ public interface TestPlanMapper {
         @Delete("DELETE FROM test_plan WHERE id = #{id}")
         int deleteById(Long id);
 
-        // ManyToMany relationship with TestCase
-        @Select("SELECT tc.*, tpc.parameter_overrides AS parameterOverrides FROM test_case tc " +
+        // ManyToMany relationship with TestCase - includes all overrides
+        @Select("SELECT tc.*, " +
+                        "tpc.parameter_overrides AS parameterOverrides, " +
+                        "tpc.case_name_override AS caseNameOverride, " +
+                        "tpc.url_override AS urlOverride, " +
+                        "tpc.method_override AS methodOverride, " +
+                        "tpc.headers_override AS headersOverride, " +
+                        "tpc.body_override AS bodyOverride, " +
+                        "tpc.assertion_script_override AS assertionScriptOverride, " +
+                        "tpc.steps_override AS stepsOverride, " +
+                        "tpc.enabled AS planEnabled " +
+                        "FROM test_case tc " +
                         "INNER JOIN test_plan_cases tpc ON tc.id = tpc.case_id " +
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
         List<com.testing.automation.model.TestCase> findCasesByPlanId(Long planId);
@@ -60,4 +70,18 @@ public interface TestPlanMapper {
 
         @Delete("DELETE FROM test_plan_cases WHERE plan_id = #{planId}")
         int removeCasesFromPlan(Long planId);
+
+        @Update("UPDATE test_plan_cases SET " +
+                        "case_name_override = #{override.caseNameOverride}, " +
+                        "url_override = #{override.urlOverride}, " +
+                        "method_override = #{override.methodOverride}, " +
+                        "headers_override = #{override.headersOverride}, " +
+                        "body_override = #{override.bodyOverride}, " +
+                        "assertion_script_override = #{override.assertionScriptOverride}, " +
+                        "steps_override = #{override.stepsOverride}, " +
+                        "parameter_overrides = #{override.parameterOverrides}, " +
+                        "enabled = #{override.enabled} " +
+                        "WHERE plan_id = #{planId} AND case_id = #{caseId}")
+        int updateCaseOverrides(@Param("planId") Long planId, @Param("caseId") Long caseId,
+                        @Param("override") com.testing.automation.dto.TestPlanCaseOverride override);
 }

@@ -12,8 +12,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import com.testing.automation.dto.VariableContext;
+import com.testing.automation.model.TestStep;
+import com.testing.automation.dto.TestPlanCaseOverride;
 
 @Service
 public class TestPlanService {
@@ -59,12 +66,21 @@ public class TestPlanService {
                 }
             }
             // Actually, findCasesByPlanId already returned TestCase objects with overrides.
-            // We just need to enrich them with steps.
+            // We just need to enrich them with steps and preserve all overrides.
             for (int i = 0; i < plan.getTestCases().size(); i++) {
                 TestCase tc = plan.getTestCases().get(i);
                 TestCase details = caseMapper.findByIdWithDetails(tc.getId());
                 if (details != null) {
+                    // Preserve ALL overrides from the plan-case relationship
                     details.setParameterOverrides(tc.getParameterOverrides());
+                    details.setCaseNameOverride(tc.getCaseNameOverride());
+                    details.setUrlOverride(tc.getUrlOverride());
+                    details.setMethodOverride(tc.getMethodOverride());
+                    details.setHeadersOverride(tc.getHeadersOverride());
+                    details.setBodyOverride(tc.getBodyOverride());
+                    details.setAssertionScriptOverride(tc.getAssertionScriptOverride());
+                    details.setStepsOverride(tc.getStepsOverride());
+                    details.setPlanEnabled(tc.getPlanEnabled());
                     plan.getTestCases().set(i, details);
                 }
             }
@@ -117,6 +133,15 @@ public class TestPlanService {
     public void delete(Long id) {
         planMapper.removeCasesFromPlan(id); // Remove join table entries first
         planMapper.deleteById(id);
+    }
+
+    /**
+     * Save plan-specific overrides for a test case
+     * This does NOT modify the original test_case table
+     */
+    @Transactional
+    public void saveCaseOverrides(Long planId, Long caseId, TestPlanCaseOverride overrides) {
+        planMapper.updateCaseOverrides(planId, caseId, overrides);
     }
 
     /**
@@ -176,5 +201,129 @@ public class TestPlanService {
             }
         }
         return results;
+    }
+
+    /**
+     * Analyze a test plan and extract all variables produced/consumed at each step
+     */
+    public Map<Integer, VariableContext> analyzePlanVariables(Long planId) {
+        TestPlan plan = findById(planId);
+        Map<Integer, VariableContext> analysis = new HashMap<>();
+        Set<String> cumulativeVariables = new HashSet<>();
+
+        // Add built-in variables
+        cumulativeVariables.add("base_url");
+        cumulativeVariables.add("timestamp");
+
+        List<TestCase> cases = plan.getTestCases();
+        if (cases == null)
+            return analysis;
+
+        for (int i = 0; i < cases.size(); i++) {
+            TestCase testCase = cases.get(i);
+            VariableContext context = new VariableContext();
+            Set<String> produced = extractProducedVariables(testCase);
+            Set<String> consumed = extractConsumedVariables(testCase);
+
+            context.setProducedVariables(new ArrayList<>(produced));
+            context.setConsumedVariables(new ArrayList<>(consumed));
+            context.setAvailableVariables(new ArrayList<>(cumulativeVariables));
+
+            // Add produced variables to cumulative set for next cases
+            cumulativeVariables.addAll(produced);
+
+            analysis.put(i, context);
+        }
+
+        return analysis;
+    }
+
+    /**
+     * Extract variables that are produced (set) by a test case
+     */
+    private Set<String> extractProducedVariables(TestCase testCase) {
+        Set<String> variables = new HashSet<>();
+        Pattern varsPutPattern = Pattern.compile("vars\\.put\\([\"']([^\"']+)[\"']");
+
+        // Check global assertion script
+        if (testCase.getEffectiveAssertionScript() != null) {
+            Matcher matcher = varsPutPattern.matcher(testCase.getEffectiveAssertionScript());
+            while (matcher.find()) {
+                variables.add(matcher.group(1));
+            }
+        }
+
+        // Check each step's assertion script
+        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        if (effectiveSteps != null) {
+            for (TestStep step : effectiveSteps) {
+                if (step.getAssertionScript() != null) {
+                    Matcher matcher = varsPutPattern.matcher(step.getAssertionScript());
+                    while (matcher.find()) {
+                        variables.add(matcher.group(1));
+                    }
+                }
+            }
+        }
+
+        return variables;
+    }
+
+    /**
+     * Extract variables that are consumed (used) by a test case
+     */
+    private Set<String> extractConsumedVariables(TestCase testCase) {
+        Set<String> variables = new HashSet<>();
+        Pattern variablePattern = Pattern.compile("\\$\\{([^}]+)\\}");
+
+        // Check URL
+        if (testCase.getEffectiveUrl() != null) {
+            Matcher matcher = variablePattern.matcher(testCase.getEffectiveUrl());
+            while (matcher.find()) {
+                variables.add(matcher.group(1));
+            }
+        }
+
+        // Check body
+        if (testCase.getEffectiveBody() != null) {
+            Matcher matcher = variablePattern.matcher(testCase.getEffectiveBody());
+            while (matcher.find()) {
+                variables.add(matcher.group(1));
+            }
+        }
+
+        // Check steps
+        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        if (effectiveSteps != null) {
+            for (TestStep step : effectiveSteps) {
+                if (step.getUrl() != null) {
+                    Matcher matcher = variablePattern.matcher(step.getUrl());
+                    while (matcher.find()) {
+                        variables.add(matcher.group(1));
+                    }
+                }
+                if (step.getBody() != null) {
+                    Matcher matcher = variablePattern.matcher(step.getBody());
+                    while (matcher.find()) {
+                        variables.add(matcher.group(1));
+                    }
+                }
+            }
+        }
+
+        return variables;
+    }
+
+    /**
+     * Suggest common parameters for a test case based on its content
+     */
+    public List<String> suggestParameters(Long caseId) {
+        TestCase testCase = caseMapper.findByIdWithDetails(caseId);
+        if (testCase == null) {
+            return new ArrayList<>();
+        }
+
+        Set<String> parameters = extractConsumedVariables(testCase);
+        return new ArrayList<>(parameters);
     }
 }

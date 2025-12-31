@@ -137,9 +137,8 @@ const selectVariable = (item) => {
 
 import { onBeforeUnmount } from 'vue'
 onBeforeUnmount(() => {
-  showSuggestions.value = false
-  suggestions.value = []
-  variables.value = []
+  // Hard cleanup only. Reseting reactive variables here can trigger re-renders 
+  // and secondary unmounts during destruction, causing parentNode errors.
 })
 
 </script>

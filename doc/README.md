@@ -81,7 +81,7 @@ GmnTestPlatform/
 ### 后端启动
 ```bash
 cd backend
-mvn spring-boot:run
+
 # 运行在 http://localhost:7777
 ```
 

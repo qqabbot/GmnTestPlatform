@@ -206,8 +206,8 @@ const filteredCases = computed(() => {
   let filtered = cases.value
   if (searchText.value) {
     filtered = filtered.filter(c =>
-      c.caseName.toLowerCase().includes(searchText.value.toLowerCase())
-    )
+    c.caseName.toLowerCase().includes(searchText.value.toLowerCase())
+  )
   }
   totalCases.value = filtered.length
   // Apply pagination

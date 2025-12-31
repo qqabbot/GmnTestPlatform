@@ -69,7 +69,27 @@ public class TestCaseController {
     }
 
     /**
+     * 按项目ID分页获取用例
+     * 使用 /project 路径避免与 /{id} 冲突
+     * 
+     * @param projectId 项目 ID
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @param keyword 搜索关键词（可选）
+     */
+    @GetMapping("/project")
+    public ResponseEntity<Map<String, Object>> getCasesByProject(
+            @RequestParam Long projectId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword) {
+        Map<String, Object> result = testCaseService.findByProjectIdWithPagination(projectId, page, size, keyword);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
      * 获取单个用例
+     * 注意：此路由必须在 /by-project 之后，避免路径冲突
      * 
      * @param id 用例 ID
      */

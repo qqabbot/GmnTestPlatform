@@ -53,15 +53,24 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- UI Testing (Placeholder for future) -->
-        <el-sub-menu index="ui" disabled>
+        <!-- UI Testing -->
+        <el-sub-menu index="ui">
           <template #title>
             <el-icon><Monitor /></el-icon>
             <span>UI Testing</span>
           </template>
-          <el-menu-item index="/ui/projects">Projects</el-menu-item>
-          <el-menu-item index="/ui/cases">Test Cases</el-menu-item>
-          <el-menu-item index="/ui/execution">Execution</el-menu-item>
+          <el-menu-item index="/ui-testing/cases">
+            <el-icon><Document /></el-icon>
+            Test Cases
+          </el-menu-item>
+          <el-menu-item index="/ui-testing/reports">
+            <el-icon><Tickets /></el-icon>
+            Reports
+          </el-menu-item>
+          <el-menu-item index="/ui-testing/guide">
+            <el-icon><Document /></el-icon>
+            操作指南
+          </el-menu-item>
         </el-sub-menu>
 
          <!-- App Testing (Placeholder for future) -->
@@ -143,11 +152,16 @@ const pageTitle = computed(() => {
     '/testing/cases': 'API Testing - Test Cases',
     '/testing/execution': 'API Testing - Execution',
     '/testing/reports': 'API Testing - Reports',
+    '/ui-testing/cases': 'UI Testing - Test Cases',
+    '/ui-testing/cases/new': 'UI Testing - New Case',
+    '/ui-testing/reports': 'UI Testing - Reports',
     '/config/environments': 'Configuration - Environments',
     '/config/variables': 'Configuration - Variables'
   }
   
-  // Handle dynamic routes (e.g., /testing/cases/new, /testing/cases/:id/edit)
+  if (route.path.startsWith('/ui-testing/cases/') && route.path.endsWith('/edit')) {
+    return 'UI Testing - Case Editor'
+  }
   if (route.path.startsWith('/testing/cases/')) {
     return 'API Testing - Test Case Editor'
   }

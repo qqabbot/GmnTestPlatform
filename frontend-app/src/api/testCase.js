@@ -8,6 +8,13 @@ export const testCaseApi = {
         })
     },
 
+    // Get test cases by project with pagination
+    getByProject(projectId, page = 0, size = 20, keyword = '') {
+        return request.get('/cases/project', {
+            params: { projectId, page, size, keyword }
+        })
+    },
+
     // Get test case by ID
     getById(id) {
         return request.get(`/cases/${id}`)

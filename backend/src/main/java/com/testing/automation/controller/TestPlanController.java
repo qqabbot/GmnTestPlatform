@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import com.testing.automation.dto.VariableContext;
 
 @RestController
 @RequestMapping("/api/test-plans")
@@ -49,5 +51,31 @@ public class TestPlanController {
     @PostMapping("/{id}/execute")
     public List<TestResult> execute(@PathVariable Long id, @RequestParam String envKey) {
         return testPlanService.executePlan(id, envKey);
+    }
+
+    /**
+     * Analyze variables produced/consumed in a test plan
+     */
+    @GetMapping("/{id}/variables")
+    public ResponseEntity<Map<Integer, VariableContext>> analyzeVariables(@PathVariable Long id) {
+        return ResponseEntity.ok(testPlanService.analyzePlanVariables(id));
+    }
+
+    /**
+     * Get suggested parameters for a test case
+     */
+    @GetMapping("/cases/{caseId}/suggest-parameters")
+    public ResponseEntity<List<String>> suggestParameters(@PathVariable Long caseId) {
+        return ResponseEntity.ok(testPlanService.suggestParameters(caseId));
+    }
+
+    /**
+     * Save plan-specific overrides for a test case
+     */
+    @PostMapping("/{id}/cases/{caseId}/overrides")
+    public ResponseEntity<Void> saveCaseOverrides(@PathVariable Long id, @PathVariable Long caseId,
+            @RequestBody com.testing.automation.dto.TestPlanCaseOverride overrides) {
+        testPlanService.saveCaseOverrides(id, caseId, overrides);
+        return ResponseEntity.ok().build();
     }
 }

@@ -66,6 +66,37 @@ const router = createRouter({
                     name: 'APIReports',
                     component: () => import('../views/TestReport.vue')
                 },
+                // UI Testing Routes
+                {
+                    path: '/ui-testing/cases',
+                    name: 'UiTestCases',
+                    component: () => import('../views/UiTestCaseList.vue')
+                },
+                {
+                    path: '/ui-testing/cases/new',
+                    name: 'NewUiTestCase',
+                    component: () => import('../views/UiTestCaseEditor.vue')
+                },
+                {
+                    path: '/ui-testing/cases/:id/edit',
+                    name: 'EditUiTestCase',
+                    component: () => import('../views/UiTestCaseEditor.vue')
+                },
+                {
+                    path: '/ui-testing/reports',
+                    name: 'UiTestReports',
+                    component: () => import('../views/UiTestReportList.vue')
+                },
+                {
+                    path: '/ui-testing/reports/:id',
+                    name: 'UiTestReportDetail',
+                    component: () => import('../views/UiTestReportDetail.vue')
+                },
+                {
+                    path: '/ui-testing/guide',
+                    name: 'UserGuide',
+                    component: () => import('../views/UserGuide.vue')
+                },
                 // Configuration Routes
                 {
                     path: '/config/environments',

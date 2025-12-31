@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.testing.automation.mapper.UiTestMapper">
+
+    <!-- UI Test Case -->
+    <insert id="insertCase" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ui_test_case (project_id, module_id, name, description, start_url, browser_type, headless, viewport_width, viewport_height, custom_headers, custom_cookies, auto_dismiss_dialogs)
+        VALUES (#{projectId}, #{moduleId}, #{name}, #{description}, #{startUrl}, #{browserType}, #{headless}, #{viewportWidth}, #{viewportHeight}, #{customHeaders}, #{customCookies}, #{autoDismissDialogs})
+    </insert>
+
+    <update id="updateCase">
+        UPDATE ui_test_case
+        SET project_id = #{projectId},
+            module_id = #{moduleId},
+            name = #{name},
+            description = #{description},
+            start_url = #{startUrl},
+            browser_type = #{browserType},
+            headless = #{headless},
+            viewport_width = #{viewportWidth},
+            viewport_height = #{viewportHeight},
+            custom_headers = #{customHeaders},
+            custom_cookies = #{customCookies},
+            auto_dismiss_dialogs = #{autoDismissDialogs}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findCaseById" resultType="com.testing.automation.model.UiTestCase">
+        SELECT * FROM ui_test_case WHERE id = #{id}
+    </select>
+
+    <select id="findCasesByModuleId" resultType="com.testing.automation.model.UiTestCase">
+        SELECT * FROM ui_test_case WHERE module_id = #{moduleId}
+    </select>
+
+    <select id="findCasesByProjectId" resultType="com.testing.automation.model.UiTestCase">
+        SELECT * FROM ui_test_case WHERE project_id = #{projectId}
+    </select>
+
+    <select id="findAllCases" resultType="com.testing.automation.model.UiTestCase">
+        SELECT * FROM ui_test_case ORDER BY created_at DESC
+    </select>
+
+    <delete id="deleteCaseById">
+        DELETE FROM ui_test_case WHERE id = #{id}
+    </delete>
+
+    <!-- UI Test Step -->
+    <insert id="insertStep" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ui_test_step (case_id, step_order, action_type, selector, value, wait_condition, parent_id, condition_expression, loop_source, screenshot_on_failure)
+        VALUES (#{caseId}, #{stepOrder}, #{actionType}, #{selector}, #{value}, #{waitCondition}, #{parentId}, #{conditionExpression}, #{loopSource}, #{screenshotOnFailure})
+    </insert>
+
+    <update id="updateStep">
+        UPDATE ui_test_step
+        SET step_order = #{stepOrder},
+            action_type = #{actionType},
+            selector = #{selector},
+            value = #{value},
+            wait_condition = #{waitCondition},
+            parent_id = #{parentId},
+            condition_expression = #{conditionExpression},
+            loop_source = #{loopSource},
+            screenshot_on_failure = #{screenshotOnFailure}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findStepsByCaseId" resultType="com.testing.automation.model.UiTestStep">
+        SELECT * FROM ui_test_step WHERE case_id = #{caseId} ORDER BY step_order ASC
+    </select>
+
+    <delete id="deleteStepsByCaseId">
+        DELETE FROM ui_test_step WHERE case_id = #{caseId}
+    </delete>
+
+    <delete id="deleteStepById">
+        DELETE FROM ui_test_step WHERE id = #{id}
+    </delete>
+
+    <!-- UI Test Execution Record -->
+    <insert id="insertRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ui_test_execution_record (project_id, case_id, status, video_path, duration, error_message)
+        VALUES (#{projectId}, #{caseId}, #{status}, #{videoPath}, #{duration}, #{errorMessage})
+    </insert>
+
+    <update id="updateRecord">
+        UPDATE ui_test_execution_record
+        SET status = #{status},
+            video_path = #{videoPath},
+            duration = #{duration},
+            error_message = #{errorMessage}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findRecordById" resultType="com.testing.automation.model.UiTestExecutionRecord">
+        SELECT r.*, c.name as case_name 
+        FROM ui_test_execution_record r
+        LEFT JOIN ui_test_case c ON r.case_id = c.id
+        WHERE r.id = #{id}
+    </select>
+
+    <select id="findRecordsByCaseId" resultType="com.testing.automation.model.UiTestExecutionRecord">
+        SELECT r.*, c.name as case_name 
+        FROM ui_test_execution_record r
+        LEFT JOIN ui_test_case c ON r.case_id = c.id
+        WHERE r.case_id = #{caseId} 
+        ORDER BY r.executed_at DESC
+    </select>
+
+    <select id="findRecordsByProjectId" resultType="com.testing.automation.model.UiTestExecutionRecord">
+        SELECT r.*, c.name as case_name 
+        FROM ui_test_execution_record r
+        LEFT JOIN ui_test_case c ON r.case_id = c.id
+        WHERE r.project_id = #{projectId} 
+        ORDER BY r.executed_at DESC
+    </select>
+
+    <select id="findAllRecords" resultType="com.testing.automation.model.UiTestExecutionRecord">
+        SELECT r.*, c.name as case_name 
+        FROM ui_test_execution_record r
+        LEFT JOIN ui_test_case c ON r.case_id = c.id
+        ORDER BY r.executed_at DESC
+    </select>
+
+    <!-- UI Test Execution Log -->
+    <insert id="insertLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ui_test_execution_log (record_id, step_id, step_name, action, selector, status, screenshot_path, error_detail)
+        VALUES (#{recordId}, #{stepId}, #{stepName}, #{action}, #{selector}, #{status}, #{screenshotPath}, #{errorDetail})
+    </insert>
+
+    <update id="updateLog">
+        UPDATE ui_test_execution_log
+        SET status = #{status},
+            selector = #{selector},
+            screenshot_path = #{screenshotPath},
+            error_detail = #{errorDetail}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findLogsByRecordId" resultType="com.testing.automation.model.UiTestExecutionLog">
+        SELECT * FROM ui_test_execution_log WHERE record_id = #{recordId} ORDER BY executed_at ASC
+    </select>
+
+</mapper>

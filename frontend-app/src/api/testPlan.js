@@ -31,5 +31,15 @@ export const testPlanApi = {
         return request.post(`/test-plans/${id}/execute`, null, {
             params: { envKey }
         })
+    },
+
+    // Save plan-specific overrides for a test case
+    saveCaseOverrides(planId, caseId, data) {
+        return request.post(`/test-plans/${planId}/cases/${caseId}/overrides`, data)
+    },
+
+    // Analyze variables produced/consumed in a test plan
+    analyzeVariables(id) {
+        return request.get(`/test-plans/${id}/variables`)
     }
 }

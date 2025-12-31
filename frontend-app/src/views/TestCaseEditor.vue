@@ -27,6 +27,7 @@
       <!-- Left Sidebar: Step List -->
       <div class="sidebar">
         <step-list
+          v-if="isMounted"
           v-model:steps="store.currentCase.steps"
           :selected-index="selectedStepIndex"
           @select="handleStepSelect"
@@ -78,7 +79,7 @@
                 </el-form-item>
 
                 <el-form-item label="Headers">
-                  <monaco-editor v-model="store.currentCase.headers" language="json" height="150px" :show-toolbar="true" />
+                  <monaco-editor v-if="isMounted" v-model="store.currentCase.headers" language="json" height="150px" :show-toolbar="true" />
                   <div class="help-text">JSON headers object</div>
                 </el-form-item>
                 
@@ -95,7 +96,7 @@
                       <el-icon><MagicStick /></el-icon> AI Mock Body
                     </el-button>
                   </div>
-                  <monaco-editor v-model="store.currentCase.body" language="json" height="200px" :show-toolbar="true" />
+                  <monaco-editor v-if="isMounted" v-model="store.currentCase.body" language="json" height="200px" :show-toolbar="true" />
                 </el-form-item>
                 
                 <el-divider />
@@ -419,7 +420,7 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, View, VideoPlay, Check, Link, DocumentCopy, MagicStick } from '@element-plus/icons-vue'
 import { useTestCaseStore } from '../stores/testCaseStore'
@@ -443,6 +444,7 @@ const store = useTestCaseStore()
 const isEditMode = computed(() => !!route.params.id)
 const selectedStepIndex = ref(-1)
 const activeTab = ref('settings')
+const isMounted = ref(true)
 const projects = ref([])
 const modules = ref([])
 const environments = ref([])
@@ -897,15 +899,16 @@ const executeRun = async () => {
 
 
 onMounted(() => {
+  // Ensure isMounted is set to true when component mounts
+  isMounted.value = true
   loadData()
 })
 
-onUnmounted(() => {
-  showResult.value = false
-  showAiDialog.value = false
-  showCurlDialog.value = false
-  showLibraryDrawer.value = false
-  selectedStepIndex.value = -1
+onBeforeUnmount(() => {
+  // Don't modify reactive state during unmount as it can cause
+  // Element Plus components (like menu) to access destroyed DOM elements
+  // Vue will automatically handle component cleanup
+  // isMounted will be reset when component mounts again
 })
 </script>
 
