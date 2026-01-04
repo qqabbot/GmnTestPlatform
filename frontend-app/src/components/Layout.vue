@@ -6,10 +6,10 @@
       </div>
       <el-menu
         :default-active="$route.path"
-        router
         background-color="#304156"
         text-color="#fff"
         active-text-color="#409EFF"
+        @select="handleMenuSelect"
       >
         <!-- Dashboard -->
         <el-menu-item index="/dashboard">
@@ -140,9 +140,35 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
+
+// Handle menu selection to prevent DOM access errors during navigation
+const handleMenuSelect = (index) => {
+  // Prevent navigation if already on the target route
+  if (route.path === index) {
+    return
+  }
+  
+  // Use requestAnimationFrame to ensure all DOM updates are complete
+  // before starting navigation. This prevents Element Plus components
+  // from accessing destroyed DOM elements during cleanup.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      router.push(index).catch(err => {
+        // Suppress known navigation errors
+        if (err.name === 'NavigationDuplicated' || 
+            err.message?.includes('parentNode') ||
+            err.message?.includes('subTree')) {
+          return
+        }
+        console.error('Menu navigation error:', err)
+      })
+    })
+  })
+}
 
 const pageTitle = computed(() => {
   const titles = {

@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="editor-header">
       <div class="header-left">
-        <el-button @click="router.back()" link>
+        <el-button @click="handleBack" link>
           <el-icon><ArrowLeft /></el-icon> Back
         </el-button>
         <el-divider direction="vertical" />
@@ -27,7 +27,6 @@
       <!-- Left Sidebar: Step List -->
       <div class="sidebar">
         <step-list
-          v-if="isMounted"
           v-model:steps="store.currentCase.steps"
           :selected-index="selectedStepIndex"
           @select="handleStepSelect"
@@ -40,7 +39,7 @@
 
       <!-- Center: Step Detail or Case Settings -->
       <div class="content-area">
-        <el-tabs v-model="activeTab" type="border-card" class="main-tabs">
+        <el-tabs v-model="activeTab" class="main-tabs" :key="route.path">
           <el-tab-pane label="Step Details" name="step">
             <step-detail v-model="currentStep" />
           </el-tab-pane>
@@ -79,7 +78,7 @@
                 </el-form-item>
 
                 <el-form-item label="Headers">
-                  <monaco-editor v-if="isMounted" v-model="store.currentCase.headers" language="json" height="150px" :show-toolbar="true" />
+                  <monaco-editor v-model="store.currentCase.headers" language="json" height="150px" :show-toolbar="true" />
                   <div class="help-text">JSON headers object</div>
                 </el-form-item>
                 
@@ -96,7 +95,7 @@
                       <el-icon><MagicStick /></el-icon> AI Mock Body
                     </el-button>
                   </div>
-                  <monaco-editor v-if="isMounted" v-model="store.currentCase.body" language="json" height="200px" :show-toolbar="true" />
+                  <monaco-editor v-model="store.currentCase.body" language="json" height="200px" :show-toolbar="true" />
                 </el-form-item>
                 
                 <el-divider />
@@ -421,7 +420,7 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ArrowLeft, View, VideoPlay, Check, Link, DocumentCopy, MagicStick } from '@element-plus/icons-vue'
 import { useTestCaseStore } from '../stores/testCaseStore'
 import { projectApi } from '../api/project'
@@ -445,6 +444,7 @@ const isEditMode = computed(() => !!route.params.id)
 const selectedStepIndex = ref(-1)
 const activeTab = ref('settings')
 const isMounted = ref(true)
+const isUnmounted = ref(false)
 const projects = ref([])
 const modules = ref([])
 const environments = ref([])
@@ -478,6 +478,7 @@ const suggestingAssertions = ref(-1) // -1 or step index
 const mockingBody = ref(-2) // -1 for case, >=0 for step, -2 for idle
 
 const handleMockBody = async (index) => {
+    if (isUnmounted.value) return
     const url = index === -1 ? store.currentCase.url : store.currentCase.steps[index].url
     const method = index === -1 ? store.currentCase.method : store.currentCase.steps[index].method
     const name = index === -1 ? store.currentCase.caseName : store.currentCase.steps[index].stepName
@@ -494,6 +495,10 @@ const handleMockBody = async (index) => {
             method,
             description: name
         })
+        
+        // Check if component is still mounted before updating state
+        if (isUnmounted.value) return
+        
         if (index === -1) {
             store.currentCase.body = result
         } else {
@@ -503,9 +508,13 @@ const handleMockBody = async (index) => {
         }
         ElMessage.success('Mock body generated')
     } catch (error) {
-        ElMessage.error('AI Mock Generation failed: ' + error.message)
+        if (!isUnmounted.value) {
+            ElMessage.error('AI Mock Generation failed: ' + error.message)
+        }
     } finally {
-        mockingBody.value = -2
+        if (!isUnmounted.value) {
+            mockingBody.value = -2
+        }
     }
 }
 
@@ -744,7 +753,7 @@ const filteredModules = computed(() => {
   return modules.value.filter(m => m.project && (typeof m.project === 'object' ? m.project.id === store.currentCase.projectId : m.project === store.currentCase.projectId))
 })
 
-watch(selectedStepIndex, (val) => {
+const stopWatch = watch(selectedStepIndex, (val) => {
   if (val >= 0) {
     activeTab.value = 'step'
   } else {
@@ -761,6 +770,9 @@ const loadData = async () => {
       environmentApi.getAll()
     ])
     
+    // Check if component is still mounted before updating state
+    if (isUnmounted.value) return
+    
     projects.value = projectsData
     modules.value = modulesData
     environments.value = environmentsData
@@ -774,6 +786,9 @@ const loadData = async () => {
     if (isEditMode.value) {
       try {
         await store.loadCase(route.params.id)
+        
+        // Check again after async operation
+        if (isUnmounted.value) return
         // Set project/module IDs correctly - handle all possible data structures
         if (store.currentCase.module) {
           if (typeof store.currentCase.module === 'object') {
@@ -798,9 +813,11 @@ const loadData = async () => {
           }
         }
       } catch (loadError) {
+        // Don't navigate if component is already unmounted
+        if (isUnmounted.value) return
         console.error('Error loading test case:', loadError)
         ElMessage.error('Failed to load test case: ' + (loadError.message || 'Unknown error'))
-        router.push('/cases')
+        router.push('/testing/cases').catch(() => {})
       }
     } else {
       store.resetCase()
@@ -811,6 +828,13 @@ const loadData = async () => {
     console.error('Failed to load initial data:', error)
     ElMessage.error('Failed to load projects and modules')
   }
+}
+
+const handleBack = () => {
+  router.back().catch(() => {
+    // Fallback to cases list if back navigation fails
+    router.push('/testing/cases').catch(() => {})
+  })
 }
 
 const handleStepSelect = (index) => {
@@ -839,6 +863,7 @@ const handleUpdateStep = (index, updates) => {
 }
 
 const handleSave = async () => {
+  if (isUnmounted.value) return
   try {
     // Validate required fields
     if (!store.currentCase.caseName || !store.currentCase.caseName.trim()) {
@@ -863,15 +888,21 @@ const handleSave = async () => {
       return
     }
     
-    await store.saveCase()
+        await store.saveCase()
+    
+    // Check if component is still mounted before updating UI
+    if (isUnmounted.value) return
+    
     ElMessage.success(isEditMode.value ? 'Test case updated successfully' : 'Test case created successfully')
     
-    if (!isEditMode.value) {
-      router.replace(`/testing/cases/${store.currentCase.id}/edit`)
+    if (!isEditMode.value && !isUnmounted.value) {
+      router.replace(`/testing/cases/${store.currentCase.id}/edit`).catch(() => {})
     }
   } catch (error) {
-    console.error('Save failed:', error)
-    ElMessage.error('Failed to save test case: ' + (error.response?.data?.message || error.message))
+    if (!isUnmounted.value) {
+      console.error('Save failed:', error)
+      ElMessage.error('Failed to save test case: ' + (error.response?.data?.message || error.message))
+    }
   }
 }
 
@@ -884,31 +915,79 @@ const handleRun = () => {
 }
 
 const executeDryRun = async () => {
+  if (isUnmounted.value) return
   await store.runDryRun(dryRunEnv.value)
+  if (isUnmounted.value) return
   isDryRun.value = true
   showDryRunDialog.value = false
   showResult.value = true
 }
 
 const executeRun = async () => {
+  if (isUnmounted.value) return
   await store.executeCase(executeEnv.value)
+  if (isUnmounted.value) return
   isDryRun.value = false
   showExecuteDialog.value = false
   showResult.value = true
 }
 
 
+// Use route guard to close dialogs before navigation
+onBeforeRouteLeave((to, from, next) => {
+  // Mark as unmounted immediately to prevent any async state updates
+  isUnmounted.value = true
+  
+  // Close all dialogs and drawers before navigation to prevent DOM access errors
+  const hasOpenDialogs = showDryRunDialog.value || showExecuteDialog.value || showCurlDialog.value || 
+      showAiDialog.value || showAiPreview.value || showLibraryDrawer.value || showResult.value
+  
+  if (hasOpenDialogs) {
+    // Close all dialogs synchronously
+    showDryRunDialog.value = false
+    showExecuteDialog.value = false
+    showCurlDialog.value = false
+    showAiDialog.value = false
+    showAiPreview.value = false
+    showLibraryDrawer.value = false
+    showResult.value = false
+  }
+  
+  // Use requestAnimationFrame to ensure all DOM updates and component cleanup
+  // operations complete before navigation. This prevents Element Plus components
+  // from accessing destroyed DOM elements.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        next()
+      } catch (error) {
+        // If navigation fails, try again after a brief delay
+        console.debug('Navigation retry:', error)
+        setTimeout(() => {
+          next()
+        }, 50)
+      }
+    })
+  })
+})
+
 onMounted(() => {
-  // Ensure isMounted is set to true when component mounts
-  isMounted.value = true
+  isUnmounted.value = false // Reset on mount
   loadData()
 })
 
 onBeforeUnmount(() => {
+  // Mark component as unmounted to prevent async operations from updating state
+  isUnmounted.value = true
+  
+  // Stop all watchers to prevent them from running during unmount
+  if (stopWatch) {
+    stopWatch()
+  }
+  
   // Don't modify reactive state during unmount as it can cause
   // Element Plus components (like menu) to access destroyed DOM elements
   // Vue will automatically handle component cleanup
-  // isMounted will be reset when component mounts again
 })
 </script>
 

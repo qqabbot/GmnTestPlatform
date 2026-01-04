@@ -179,8 +179,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, VideoPlay, Check, Plus, Delete, Upload } from '@element-plus/icons-vue'
 import { uiTestApi } from '../api/uiTest'
@@ -545,6 +545,19 @@ const handleImportCode = () => {
     ElMessage.error('Failed to parse any steps. Please check the code format.')
   }
 }
+
+// Use route guard to ensure clean navigation
+onBeforeRouteLeave((to, from, next) => {
+  // Close any open dialogs before navigation
+  if (showImportDialog.value) {
+    showImportDialog.value = false
+    nextTick(() => {
+      next()
+    })
+  } else {
+    next()
+  }
+})
 
 onMounted(loadData)
 

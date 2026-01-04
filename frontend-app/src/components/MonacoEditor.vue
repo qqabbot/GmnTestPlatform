@@ -147,11 +147,12 @@ onBeforeUnmount(() => {
     clearTimeout(layoutTimer)
     layoutTimer = null
   }
+  // Dispose editor instance to prevent memory leaks and DOM access errors
   if (editorInstance) {
     try {
       editorInstance.dispose()
     } catch (e) {
-      // Ignore disposal errors
+      // Ignore errors during disposal
     }
     editorInstance = null
   }
@@ -190,7 +191,8 @@ const handleMount = async (editor, monaco) => {
       // Use a timeout or background fetch to not delay editor init? 
       // Actually we just start the fetch, the provider will use 'variables' array which fills up later.
       environmentApi.getAll().then(envs => {
-        if (!isMounted.value) return
+        // Check if component is still mounted before processing
+        if (!isMounted.value || !editorInstance) return
          // Add built-in variables
         variables.push({ label: 'base_url', insertText: '${base_url}', detail: 'Global Variable', kind: monaco.languages.CompletionItemKind.Variable })
         variables.push({ label: 'timestamp', insertText: '${timestamp}', detail: 'Built-in', kind: monaco.languages.CompletionItemKind.Variable })

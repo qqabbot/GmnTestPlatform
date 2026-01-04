@@ -57,6 +57,7 @@
 </template>
 
 <script setup>
+import { onBeforeUnmount } from 'vue'
 import draggable from 'vuedraggable'
 
 const props = defineProps({
@@ -90,6 +91,12 @@ const getMethodType = (method) => {
   }
   return types[method] || 'info'
 }
+
+// Cleanup on unmount to prevent DOM access errors
+onBeforeUnmount(() => {
+  // Draggable will be cleaned up automatically by Vue
+  // No additional cleanup needed
+})
 </script>
 
 <style scoped>
