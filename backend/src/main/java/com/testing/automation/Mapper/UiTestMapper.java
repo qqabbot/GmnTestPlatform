@@ -1,4 +1,4 @@
-package com.testing.automation.mapper;
+package com.testing.automation.Mapper;
 
 import com.testing.automation.model.*;
 import org.apache.ibatis.annotations.Mapper;

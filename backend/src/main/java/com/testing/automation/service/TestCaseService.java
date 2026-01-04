@@ -3,7 +3,7 @@ package com.testing.automation.service;
 import com.testing.automation.dto.DryRunResponse;
 import com.testing.automation.dto.TestResponse;
 import com.testing.automation.dto.TestResult;
-import com.testing.automation.mapper.*;
+import com.testing.automation.Mapper.*;
 import com.testing.automation.model.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;

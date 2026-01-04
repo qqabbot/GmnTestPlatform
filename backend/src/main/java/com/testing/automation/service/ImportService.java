@@ -2,10 +2,10 @@ package com.testing.automation.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.testing.automation.mapper.ProjectMapper;
-import com.testing.automation.mapper.TestCaseMapper;
-import com.testing.automation.mapper.TestModuleMapper;
-import com.testing.automation.mapper.TestStepMapper;
+import com.testing.automation.Mapper.ProjectMapper;
+import com.testing.automation.Mapper.TestCaseMapper;
+import com.testing.automation.Mapper.TestModuleMapper;
+import com.testing.automation.Mapper.TestStepMapper;
 import com.testing.automation.model.Project;
 import com.testing.automation.model.TestCase;
 import com.testing.automation.model.TestModule;

@@ -1,6 +1,6 @@
 package com.testing.automation.service;
 
-import com.testing.automation.mapper.EnvironmentMapper;
+import com.testing.automation.Mapper.EnvironmentMapper;
 import com.testing.automation.model.Environment;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

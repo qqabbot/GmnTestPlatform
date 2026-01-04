@@ -1,7 +1,7 @@
 package com.testing.automation.job;
 
 import com.testing.automation.dto.TestResult;
-import com.testing.automation.mapper.ScheduledTaskMapper;
+import com.testing.automation.Mapper.ScheduledTaskMapper;
 import com.testing.automation.model.ScheduledTask;
 import com.testing.automation.service.TestPlanService;
 import org.quartz.Job;

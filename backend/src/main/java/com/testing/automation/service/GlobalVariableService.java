@@ -1,6 +1,6 @@
 package com.testing.automation.service;
 
-import com.testing.automation.mapper.GlobalVariableMapper;
+import com.testing.automation.Mapper.GlobalVariableMapper;
 import com.testing.automation.model.GlobalVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

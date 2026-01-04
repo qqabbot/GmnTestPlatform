@@ -1,4 +1,4 @@
-package com.testing.automation.mapper;
+package com.testing.automation.Mapper;
 
 import com.testing.automation.model.GlobalVariable;
 import org.apache.ibatis.annotations.*;

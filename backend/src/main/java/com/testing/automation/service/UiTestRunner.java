@@ -2,7 +2,7 @@ package com.testing.automation.service;
 
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.ScreenshotType;
-import com.testing.automation.mapper.UiTestMapper;
+import com.testing.automation.Mapper.UiTestMapper;
 import com.testing.automation.model.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package com.testing.automation.mapper;
+package com.testing.automation.Mapper;
 
 import com.testing.automation.model.TestPlan;
 import org.apache.ibatis.annotations.*;
@@ -10,24 +10,24 @@ public interface TestPlanMapper {
         @Select("SELECT * FROM test_plan ORDER BY id DESC")
         @Results({
                         @Result(property = "id", column = "id"),
-                        @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.mapper.ProjectMapper.findById")),
-                        @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.mapper.TestPlanMapper.findCasesByPlanId"))
+                        @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.Mapper.ProjectMapper.findById")),
+                        @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.Mapper.TestPlanMapper.findCasesByPlanId"))
         })
         List<TestPlan> findAll();
 
         @Select("SELECT * FROM test_plan WHERE id = #{id}")
         @Results({
                         @Result(property = "id", column = "id"),
-                        @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.mapper.ProjectMapper.findById")),
-                        @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.mapper.TestPlanMapper.findCasesByPlanId"))
+                        @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.Mapper.ProjectMapper.findById")),
+                        @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.Mapper.TestPlanMapper.findCasesByPlanId"))
         })
         TestPlan findById(Long id);
 
         @Select("SELECT * FROM test_plan WHERE project_id = #{projectId} ORDER BY id DESC")
         @Results({
                         @Result(property = "id", column = "id"),
-                        @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.mapper.ProjectMapper.findById")),
-                        @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.mapper.TestPlanMapper.findCasesByPlanId"))
+                        @Result(property = "project", column = "project_id", one = @One(select = "com.testing.automation.Mapper.ProjectMapper.findById")),
+                        @Result(property = "testCases", column = "id", many = @Many(select = "com.testing.automation.Mapper.TestPlanMapper.findCasesByPlanId"))
         })
         List<TestPlan> findByProjectId(Long projectId);
 

@@ -24,7 +24,7 @@ mybatis:
 
 logging:
   level:
-    com.testing.automation.mapper: INFO
+    com.testing.automation.Mapper: INFO
     root: INFO
     com.testing.automation: DEBUG
     com.zaxxer.hikari: DEBUG
@@ -40,14 +40,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, metrics, prometheus
+        include: health, metrics
     jmx:
       exposure:
         exclude: "*"
   metrics:
     export:
       prometheus:
-        enabled: true
+        enabled: false
 
 # AI Configuration
 ai:

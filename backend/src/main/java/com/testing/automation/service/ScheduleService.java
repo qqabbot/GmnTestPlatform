@@ -1,7 +1,7 @@
 package com.testing.automation.service;
 
 import com.testing.automation.job.PlanExecutionJob;
-import com.testing.automation.mapper.ScheduledTaskMapper;
+import com.testing.automation.Mapper.ScheduledTaskMapper;
 import com.testing.automation.model.ScheduledTask;
 import org.quartz.*;
 import org.springframework.beans.factory.annotation.Autowired;

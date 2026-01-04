@@ -1,7 +1,7 @@
 package com.testing.automation.service;
 
 import com.microsoft.playwright.Playwright;
-import com.testing.automation.mapper.UiTestMapper;
+import com.testing.automation.Mapper.UiTestMapper;
 import com.testing.automation.model.UiTestCase;
 import com.testing.automation.model.UiTestStep;
 import org.junit.jupiter.api.Test;

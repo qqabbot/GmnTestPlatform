@@ -1,6 +1,6 @@
 package com.testing.automation.service;
 
-import com.testing.automation.mapper.UiTestMapper;
+import com.testing.automation.Mapper.UiTestMapper;
 import com.testing.automation.model.UiTestCase;
 import com.testing.automation.model.UiTestStep;
 import com.testing.automation.model.UiTestExecutionRecord;

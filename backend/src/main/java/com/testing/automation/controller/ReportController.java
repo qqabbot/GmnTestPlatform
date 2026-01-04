@@ -1,6 +1,6 @@
 package com.testing.automation.controller;
 
-import com.testing.automation.mapper.TestExecutionRecordMapper;
+import com.testing.automation.Mapper.TestExecutionRecordMapper;
 import com.testing.automation.model.TestExecutionRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

@@ -1,6 +1,6 @@
 package com.testing.automation.service;
 
-import com.testing.automation.mapper.TestStepTemplateMapper;
+import com.testing.automation.Mapper.TestStepTemplateMapper;
 import com.testing.automation.model.TestStepTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
