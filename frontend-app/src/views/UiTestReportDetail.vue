@@ -113,18 +113,17 @@ const loading = ref(false)
 const record = ref(null)
 const logs = ref([])
 
-// Backend host for static resources
-const backendBase = 'http://localhost:7777'
+// No longer need hardcoded localhost:7777, using relative paths via Vite proxy
 
 const videoUrl = computed(() => {
   if (!record.value || !record.value.videoPath) return ''
   // videoPath is stored as something like "videos/record_123.webm"
-  return `${backendBase}/${record.value.videoPath}`
+  return `/${record.value.videoPath}`
 })
 
 const getScreenshotUrl = (path) => {
   if (!path) return ''
-  return `${backendBase}/${path}`
+  return `/${path}`
 }
 
 const loadData = async () => {

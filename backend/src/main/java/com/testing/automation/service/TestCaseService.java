@@ -104,7 +104,7 @@ public class TestCaseService {
         }
 
         // Save steps, extractors, and assertions
-        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        List<TestStep> effectiveSteps = testCase.getSteps();
         if (effectiveSteps != null && !effectiveSteps.isEmpty()) {
             for (TestStep step : effectiveSteps) {
                 step.setCaseId(testCase.getId());
@@ -148,6 +148,10 @@ public class TestCaseService {
                     for (com.testing.automation.model.Assertion assertion : step.getAssertions()) {
                         assertion.setStepId(step.getId());
                         assertion.setCreatedAt(LocalDateTime.now());
+                        // Ensure type is not null (database constraint)
+                        if (assertion.getType() == null || assertion.getType().trim().isEmpty()) {
+                            assertion.setType("script");
+                        }
                         assertionMapper.insert(assertion);
                     }
                 }
@@ -173,9 +177,9 @@ public class TestCaseService {
      * 按项目ID分页查询用例
      * 
      * @param projectId 项目ID
-     * @param page 页码（从0开始）
-     * @param size 每页大小
-     * @param keyword 搜索关键词（可选）
+     * @param page      页码（从0开始）
+     * @param size      每页大小
+     * @param keyword   搜索关键词（可选）
      * @return 包含 cases 列表和 total 总数的 Map
      */
     public Map<String, Object> findByProjectIdWithPagination(Long projectId, int page, int size, String keyword) {
@@ -315,7 +319,7 @@ public class TestCaseService {
         if (currentDepth > MAX_RECURSION_DEPTH) {
             return TestResult.builder()
                     .caseId(testCase.getId())
-                    .caseName(testCase.getEffectiveCaseName())
+                    .caseName(testCase.getCaseName())
                     .status("FAIL")
                     .message("Max recursion depth exceeded")
                     .detail("Circular dependency detected or nesting too deep (Max: " + MAX_RECURSION_DEPTH + ")")
@@ -331,7 +335,7 @@ public class TestCaseService {
             if (!allPassed) {
                 return TestResult.builder()
                         .caseId(testCase.getId())
-                        .caseName(testCase.getEffectiveCaseName())
+                        .caseName(testCase.getCaseName())
                         .status("SKIPPED")
                         .message("Precondition failed")
                         .detail("Precondition failed: " + testCase.getPrecondition())
@@ -352,7 +356,7 @@ public class TestCaseService {
         String finalMessage = "Success";
         String finalDetail = "Success";
 
-        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        List<TestStep> effectiveSteps = testCase.getSteps();
         if (effectiveSteps != null && !effectiveSteps.isEmpty()) {
             // Execute Steps
             for (TestStep step : effectiveSteps) {
@@ -400,7 +404,7 @@ public class TestCaseService {
                                     .body(referencedResult.getResponseBody())
                                     .headers(new HashMap<>())
                                     .build();
-                            stepUrl = "Referenced Case: " + referencedCase.getEffectiveCaseName() + " (ID: "
+                            stepUrl = "Referenced Case: " + referencedCase.getCaseName() + " (ID: "
                                     + step.getReferenceCaseId() + ")";
                             stepBody = "Executed referenced test case";
 
@@ -539,21 +543,21 @@ public class TestCaseService {
         // Execute Main Request if URL and method are provided
         // This executes after steps (if any) so that variables extracted from steps can
         // be used
-        if (testCase.getEffectiveUrl() != null && !testCase.getEffectiveUrl().trim().isEmpty()
-                && testCase.getEffectiveMethod() != null && !testCase.getEffectiveMethod().trim().isEmpty()) {
+        if (testCase.getUrl() != null && !testCase.getUrl().trim().isEmpty()
+                && testCase.getMethod() != null && !testCase.getMethod().trim().isEmpty()) {
             try {
                 // Resolve variables (including those extracted from steps)
-                String resolvedUrl = replaceVariables(testCase.getEffectiveUrl(), runtimeVariables);
-                String resolvedBody = testCase.getEffectiveBody() != null
-                        ? replaceVariables(testCase.getEffectiveBody(), runtimeVariables)
+                String resolvedUrl = replaceVariables(testCase.getUrl(), runtimeVariables);
+                String resolvedBody = testCase.getBody() != null
+                        ? replaceVariables(testCase.getBody(), runtimeVariables)
                         : null;
                 // Also replace variables in headers (including variables from steps)
-                String resolvedHeaders = testCase.getEffectiveHeaders();
+                String resolvedHeaders = testCase.getHeaders();
                 if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
                     resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                 }
 
-                lastResponse = executeHttpRequest(testCase.getEffectiveMethod(), resolvedUrl, resolvedBody,
+                lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
                         resolvedHeaders);
 
                 // Log for main request
@@ -564,7 +568,7 @@ public class TestCaseService {
                 // Set request headers (use resolved headers for display, but log original for
                 // reference)
                 log.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
-                        : (testCase.getEffectiveHeaders() != null ? testCase.getEffectiveHeaders() : "{}"));
+                        : (testCase.getHeaders() != null ? testCase.getHeaders() : "{}"));
                 // Set response headers
                 if (lastResponse.getHeaders() != null && !lastResponse.getHeaders().isEmpty()) {
                     try {
@@ -595,9 +599,9 @@ public class TestCaseService {
                 // Log failure
                 TestExecutionLog log = new TestExecutionLog();
                 log.setStepName("Main Request");
-                log.setRequestUrl(testCase.getEffectiveUrl());
-                log.setRequestBody(testCase.getEffectiveBody());
-                log.setRequestHeaders(testCase.getEffectiveHeaders() != null ? testCase.getEffectiveHeaders() : "{}");
+                log.setRequestUrl(testCase.getUrl());
+                log.setRequestBody(testCase.getBody());
+                log.setRequestHeaders(testCase.getHeaders() != null ? testCase.getHeaders() : "{}");
                 log.setResponseHeaders("{}");
                 log.setResponseStatus(0);
                 log.setResponseBody(e.getMessage());
@@ -628,7 +632,7 @@ public class TestCaseService {
 
         return TestResult.builder()
                 .caseId(testCase.getId())
-                .caseName(testCase.getEffectiveCaseName())
+                .caseName(testCase.getCaseName())
                 .status(status)
                 .message(finalMessage)
                 .detail(finalDetail)
@@ -743,7 +747,7 @@ public class TestCaseService {
             java.util.function.Supplier<TestResponse> baseSupplier = () -> {
                 WebClient.RequestBodySpec request = webClient
                         .method(org.springframework.http.HttpMethod.valueOf(method))
-                    .uri(url);
+                        .uri(url);
 
                 // Parse and apply headers
                 if (headers != null && !headers.trim().isEmpty()) {
@@ -759,19 +763,19 @@ public class TestCaseService {
                     }
                 }
 
-            if (body != null && !body.isEmpty()) {
-                request.bodyValue(body);
-            }
+                if (body != null && !body.isEmpty()) {
+                    request.bodyValue(body);
+                }
 
-            Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
-                    .toEntity(String.class);
-            org.springframework.http.ResponseEntity<String> response = responseMono.block();
+                Mono<org.springframework.http.ResponseEntity<String>> responseMono = request.retrieve()
+                        .toEntity(String.class);
+                org.springframework.http.ResponseEntity<String> response = responseMono.block();
 
-            return TestResponse.builder()
+                return TestResponse.builder()
                         .statusCode(response.getStatusCode().value()) // Use non-deprecated API
-                    .body(response.getBody())
-                    .headers(response.getHeaders().toSingleValueMap())
-                    .build();
+                        .body(response.getBody())
+                        .headers(response.getHeaders().toSingleValueMap())
+                        .build();
             };
 
             // Apply Resilience4j decorators: CircuitBreaker first, then Retry
@@ -801,19 +805,24 @@ public class TestCaseService {
             // Clean expression: remove any escape characters and fix common issues
             if (expression != null) {
                 String originalExpression = expression;
-                // Remove all escape characters: \$ -> $
+
+                // 1. Remove all escape characters: \$ -> $
                 expression = expression.replace("\\$", "$");
-                if (!originalExpression.equals(expression)) {
-                    System.out.println("Cleaned expression from \\$ to $: [" + expression + "]");
+
+                // 2. Remove ${} wrappers if user accidentally included them: ${token} -> token
+                if (expression.startsWith("${") && expression.endsWith("}")) {
+                    expression = expression.substring(2, expression.length() - 1);
+                    System.out.println("Cleaned expression from ${} wrapper: [" + expression + "]");
                 }
-                // Also handle cases where expression might be empty or invalid
+
                 if (expression == null || expression.trim().isEmpty()) {
                     System.err.println("Extractor expression is empty or null!");
                     return null;
                 }
-                // Fix common issues: $token -> $.token, $data.token -> $.data.token
+
+                // 3. Fix common issues: $token -> $.token, $data.token -> $.data.token
                 if (expression.startsWith("$") && expression.length() > 1 && expression.charAt(1) != '.'
-                        && expression.charAt(1) != '[') {
+                        && expression.charAt(1) != '[' && expression.charAt(1) != '(') {
                     // If expression is like $token, convert to $.token
                     expression = "$." + expression.substring(1);
                     System.out
@@ -924,13 +933,26 @@ public class TestCaseService {
             Map<String, Object> vars = new HashMap<>(variables);
             engine.put("vars", vars);
 
-            // Provide jsonPath helper function
-            engine.eval("def jsonPath(response, path) { " +
-                    "try { " +
-                    "  return com.jayway.jsonpath.JsonPath.read(response.getBody() ?: '{}', path); " +
-                    "} catch (Exception e) { " +
+            // Provide jsonPath helper function with improved hyphenated key support
+            engine.eval("def jsonPath(responseObj, path) { " +
+                    "  try { " +
+                    "    def body = (responseObj instanceof com.testing.automation.dto.TestResponse) ? responseObj.getBody() : responseObj.toString(); "
+                    +
+                    "    return com.jayway.jsonpath.JsonPath.read(body ?: '{}', path); " +
+                    "  } catch (Exception e) { " +
+                    "    System.err.println('jsonPath error for path [' + path + ']: ' + e.getMessage()); " +
+                    "    return null; " +
+                    "  }" +
+                    "}");
+
+            // Provide regex helper function
+            engine.eval("def regex(text, pattern) { " +
+                    "  if (text == null) return null; " +
+                    "  def matcher = (text =~ pattern); " +
+                    "  if (matcher.find() && matcher.groupCount() > 0) { " +
+                    "    return matcher.group(1); " +
+                    "  } " +
                     "  return null; " +
-                    "}" +
                     "}");
 
             // Add all runtime variables to script context

@@ -44,3 +44,5 @@ dist/
 ### Backend Generated ###
 testdb.db
 allure-results/
+backend/videos/
+.gemini/

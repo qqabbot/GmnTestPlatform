@@ -17,126 +17,163 @@
         style="margin-bottom: 20px;"
       />
 
-      <!-- Basic Info -->
-      <el-form label-width="140px" size="default">
-        <el-form-item label="Case Name" :required="!planId">
-          <template #label>
-            <div class="form-label-with-badge">
-              <span>Case Name</span>
-              <el-tag v-if="planId && isOverridden('caseName')" type="warning" size="small" effect="plain" class="override-badge">Modified</el-tag>
-            </div>
-          </template>
-          <div class="input-with-reset">
-            <el-input 
-              v-model="caseData.caseName" 
-              :placeholder="planId ? (originalData?.caseName || 'Enter name override') : 'Enter test case name'" 
-            />
-            <el-button v-if="planId && isOverridden('caseName')" link type="primary" @click="resetField('caseName')">Reset</el-button>
-          </div>
-        </el-form-item>
-        
-        <el-form-item label="HTTP Method" :required="!planId">
-          <template #label>
-            <div class="form-label-with-badge">
-              <span>HTTP Method</span>
-              <el-tag v-if="planId && isOverridden('method')" type="warning" size="small" effect="plain" class="override-badge">Modified</el-tag>
-            </div>
-          </template>
-          <div class="input-with-reset">
-            <el-radio-group v-model="caseData.method">
-              <el-radio label="GET">GET</el-radio>
-              <el-radio label="POST">POST</el-radio>
-              <el-radio label="PUT">PUT</el-radio>
-              <el-radio label="DELETE">DELETE</el-radio>
-              <el-radio label="PATCH">PATCH</el-radio>
-            </el-radio-group>
-            <el-button v-if="planId && isOverridden('method')" link type="primary" @click="resetField('method')">Reset</el-button>
-          </div>
-        </el-form-item>
-        
-        <el-form-item label="Request URL" :required="!planId">
-          <template #label>
-            <div class="form-label-with-badge">
-              <span>Request URL</span>
-              <el-tag v-if="planId && isOverridden('url')" type="warning" size="small" effect="plain" class="override-badge">Modified</el-tag>
-            </div>
-          </template>
-          <div class="input-with-reset">
-            <el-input 
-              v-model="caseData.url" 
-              :placeholder="planId ? (originalData?.url || 'Enter URL override') : 'http://api.example.com/endpoint'" 
-            />
-            <el-button v-if="planId && isOverridden('url')" link type="primary" @click="resetField('url')">Reset</el-button>
-          </div>
-        </el-form-item>
+      <!-- Plan Mode: Simplified Configuration -->
+      <div v-if="planId">
+        <!-- 0. Source Case Reference (Read-only) -->
+        <el-collapse v-model="activeCollapse" style="margin-bottom: 20px;">
+          <el-collapse-item name="source">
+            <template #title>
+              <el-icon><InfoFilled /></el-icon>
+              <span style="margin-left: 8px; font-weight: bold;">Source Case Reference (Read-only)</span>
+            </template>
+            <div class="source-info">
+              <div class="info-row">
+                <span class="info-label">Endpoint:</span>
+                <el-tag size="small">{{ originalData?.method }}</el-tag>
+                <span class="info-value">{{ originalData?.url }}</span>
+              </div>
+              
+              <div v-if="originalData?.body" class="info-group">
+                <div class="info-label">Request Body:</div>
+                <div class="code-preview">
+                  <pre>{{ originalData.body }}</pre>
+                </div>
+              </div>
 
-        <!-- Variable Discovery Section (Only in Plan Mode) -->
-        <div v-if="planId" class="variable-helper">
-          <el-icon><InfoFilled /></el-icon>
-          <span>Available Variables: </span>
-          <el-tag 
-            v-for="v in availableVariables" 
-            :key="v" 
-            size="small" 
-            class="var-tag"
-            @click="insertVariable(v)"
-          >
-           {{ v }}
-          </el-tag>
-        </div>
+              <div v-if="originalData?.steps?.length" class="info-group">
+                <div class="info-label">Steps ({{ originalData.steps.length }}):</div>
+                <div class="steps-list">
+                  <div v-for="(step, idx) in originalData.steps" :key="idx" class="step-summary">
+                    <span class="step-index-mini">{{ idx + 1 }}</span>
+                    <el-tag size="small" type="info" style="margin: 0 5px">{{ step.method }}</el-tag>
+                    <span class="step-url-mini">{{ step.url }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
 
-        <!-- Steps Section -->
-        <el-divider>
-          <span>Test Steps</span>
-          <el-tag v-if="planId && isOverridden('steps')" type="warning" size="small" effect="plain" style="margin-left: 10px;">Modified in Plan</el-tag>
+        <!-- 1. Parameter Mapping -->
+        <el-divider content-position="left">
+          <el-icon><Setting /></el-icon>
+          <span style="margin-left: 8px">Parameter Mappings (Input)</span>
         </el-divider>
+        <p class="section-desc">Map variables from previous steps to this case's inputs (e.g., URL or Body).</p>
         
-        <div v-if="caseData.steps && caseData.steps.length > 0" class="steps-section">
-          <div v-for="(step, index) in caseData.steps" :key="step.id || index" class="step-card">
-            <div class="step-header">
-              <span class="step-index">{{ index + 1 }}</span>
-              <el-tag :type="step.method === 'GET' ? 'success' : 'primary'" size="small">
-                {{ step.method }}
-              </el-tag>
-              <span class="step-name">{{ step.stepName || 'Unnamed Step' }}</span>
-              <el-button v-if="planId" link type="primary" size="small" @click="editStepOverride(step, index)">Override</el-button>
-            </div>
-            <div class="step-url">{{ step.url }}</div>
-          </div>
-        </div>
-        <div v-else class="empty-steps">
-          <el-empty description="No steps configured" :image-size="60" />
-        </div>
+        <el-table :data="parameterList" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="Target Variable" width="180">
+            <template #default="{ row }">
+              <el-input v-model="row.key" placeholder="e.g. userId" />
+            </template>
+          </el-table-column>
+          <el-table-column label="Source (Expression)">
+            <template #default="{ row }">
+              <el-input v-model="row.value" placeholder="e.g. ${loginCase.userId} or 123">
+                <template #append>
+                  <el-dropdown trigger="click" @command="(val) => row.value = val">
+                    <el-button link><el-icon><ArrowDown /></el-icon></el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item v-for="v in availableVariables" :key="v" :command="v">{{ v }}</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
+              </el-input>
+            </template>
+          </el-table-column>
+          <el-table-column label="Action" width="80" align="center">
+            <template #default="{ $index }">
+              <el-button type="danger" link @click="removeParameter($index)"><el-icon><Close /></el-icon></el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button type="primary" link @click="addParameter"><el-icon><Plus /></el-icon> Add Parameter</el-button>
 
-        <!-- Assertion Section -->
-        <el-divider>
-          <span>Global Assertion</span>
-          <el-tag v-if="planId && isOverridden('assertionScript')" type="warning" size="small" effect="plain" style="margin-left: 10px;">Modified</el-tag>
+        <!-- 2. Variable Extractors -->
+        <el-divider content-position="left">
+          <el-icon><Search /></el-icon>
+          <span style="margin-left: 8px">Variable Extractors (Output)</span>
         </el-divider>
+        <p class="section-desc">Extract values from response to be used by subsequent cases.</p>
         
-        <el-form-item label="Assertion Script">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span class="label-text">Groovy Script</span>
-            <el-button v-if="planId && isOverridden('assertionScript')" link type="primary" @click="resetField('assertionScript')">Reset</el-button>
-          </div>
-          <el-input
-            v-model="caseData.assertionScript"
-            type="textarea"
-            :rows="6"
-            placeholder="vars.put('token', jsonPath(response, '$.token'))"
-          />
-        </el-form-item>
-      </el-form>
+        <el-table :data="extractors" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="Save To Variable" width="180">
+            <template #default="{ row }">
+              <el-input v-model="row.variable" placeholder="e.g. new_token" />
+            </template>
+          </el-table-column>
+          <el-table-column label="Source" width="120">
+            <template #default="{ row }">
+              <el-select v-model="row.source">
+                <el-option label="JSONPath" value="json" />
+                <el-option label="Regex" value="regex" />
+                <el-option label="Header" value="header" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="Expression">
+            <template #default="{ row }">
+              <el-input v-model="row.expression" :placeholder="row.source === 'json' ? '$.data.id' : 'expression'" />
+            </template>
+          </el-table-column>
+          <el-table-column label="Action" width="80" align="center">
+            <template #default="{ $index }">
+              <el-button type="danger" link @click="removeExtractor($index)"><el-icon><Close /></el-icon></el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button type="primary" link @click="addExtractor"><el-icon><Plus /></el-icon> Add Extractor</el-button>
 
-      <!-- Action Buttons -->
+        <!-- 3. Assertion Logic -->
+        <el-divider content-position="left">
+          <el-icon><Checked /></el-icon>
+          <span style="margin-left: 8px">Custom Assertion Logic</span>
+        </el-divider>
+        <el-input
+          v-model="caseData.assertionScript"
+          type="textarea"
+          :rows="5"
+          placeholder="// Any custom Groovy logic here (extractors handled above automatically)"
+          style="font-family: monospace;"
+        />
+      </div>
+
+      <!-- Normal Mode: Full Preview (If needed for ref) or other views -->
+      <div v-else>
+        <!-- Existing full form for editing original case - mostly keeping as is -->
+        <el-form label-width="120px">
+           <el-form-item label="Case Name">
+             <el-input v-model="caseData.caseName" />
+           </el-form-item>
+           <!-- URL and Method already shown or needed? Keeping it simple for now -->
+            <el-form-item label="Request Info">
+              <el-tag>{{ caseData.method }}</el-tag>
+              <span style="margin-left: 10px">{{ caseData.url }}</span>
+            </el-form-item>
+            
+            <el-divider>Steps</el-divider>
+            <div class="steps-list">
+               <div v-for="(step, idx) in caseData.steps" :key="idx" class="step-summary">
+                 <el-tag size="small">{{ step.method }}</el-tag> {{ step.url }}
+               </div>
+            </div>
+
+            <el-divider>Logic</el-divider>
+            <el-input
+              v-model="caseData.assertionScript"
+              type="textarea"
+              :rows="8"
+            />
+        </el-form>
+      </div>
+
       <div class="drawer-actions">
-        <el-button @click="handleClose">Cancel</el-button>
-        <el-button v-if="!planId" type="primary" @click="openFullEditor">
-          Open Full Editor
-          <el-icon><EditPen /></el-icon>
-        </el-button>
-        <el-button type="success" @click="saveChanges" :loading="saving">
-          {{ planId ? 'Save Overrides' : 'Save Changes' }}
+        <el-button @click="handleClose">Close</el-button>
+        <el-button v-if="!planId" type="primary" @click="openFullEditor">Full Editor</el-button>
+        <el-button type="success" :loading="saving" @click="saveChanges">
+          {{ planId ? 'Update Plan Step' : 'Update Case' }}
         </el-button>
       </div>
     </div>
@@ -154,25 +191,16 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { EditPen, InfoFilled } from '@element-plus/icons-vue'
+import { EditPen, InfoFilled, Search, Checked, Plus, ArrowDown, Setting, Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { testCaseApi } from '../api/testCase'
 import { testPlanApi } from '../api/testPlan'
 import StepOverrideDialog from './StepOverrideDialog.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  caseId: {
-    type: Number,
-    default: null
-  },
-  planId: {
-    type: Number,
-    default: null
-  },
+  modelValue: Boolean,
+  caseId: [Number, String],
+  planId: [Number, String],
   availableVariables: {
     type: Array,
     default: () => []
@@ -181,16 +209,27 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'saved'])
 
-const router = useRouter()
 const visible = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
 })
 
-const caseData = ref(null)
-const originalData = ref(null) // The base template
-const saving = ref(false)
 const loading = ref(false)
+const saving = ref(false)
+const caseData = ref(null)
+const originalData = ref(null)
+const availableVariables = ref([])
+const extractors = ref([])
+const parameterList = ref([]) // For UI editing of parameterOverrides
+const activeCollapse = ref(['source']) // Keep source expanded by default
+
+// Extractor sources
+const extractorSources = [
+  { label: 'JSONPath', value: 'json' },
+  { label: 'Regex', value: 'regex' },
+  { label: 'Header', value: 'header' }
+]
+const router = useRouter()
 
 // Step Override State
 const showStepDialog = ref(false)
@@ -222,50 +261,41 @@ const loadCaseData = async (id) => {
     originalData.value = JSON.parse(JSON.stringify(template))
     
     // 2. If planId is present, we need to load plan-specific overrides
-    // The parent component should pass the case with overrides, but we'll also try to fetch from plan
     if (props.planId) {
       try {
-        // Fetch the plan to get overrides for this case
         const plan = await testPlanApi.getById(props.planId)
         const planCase = plan.testCases?.find(c => c.id === id)
         
+        caseData.value = JSON.parse(JSON.stringify(template))
+        
         if (planCase) {
-          // Merge overrides into caseData
-          caseData.value = JSON.parse(JSON.stringify(template))
+          // Simplified: only parameterOverrides and assertionScriptOverride
+          if (planCase.parameterOverrides) {
+             caseData.value.parameterOverrides = planCase.parameterOverrides
+             try {
+                const params = JSON.parse(planCase.parameterOverrides)
+                parameterList.value = Object.entries(params).map(([key, value]) => ({ key, value }))
+             } catch (e) {
+                parameterList.value = []
+             }
+          }
           
-          // Apply overrides if they exist
-          if (planCase.caseNameOverride) caseData.value.caseName = planCase.caseNameOverride
-          if (planCase.urlOverride) caseData.value.url = planCase.urlOverride
-          if (planCase.methodOverride) caseData.value.method = planCase.methodOverride
-          if (planCase.headersOverride) caseData.value.headers = planCase.headersOverride
-          if (planCase.bodyOverride) caseData.value.body = planCase.bodyOverride
-          if (planCase.assertionScriptOverride) caseData.value.assertionScript = planCase.assertionScriptOverride
-          
-          // Parse stepsOverride
-          if (planCase.stepsOverride) {
-            try {
-              stepsOverridden.value = JSON.parse(planCase.stepsOverride)
-            } catch (e) {
-              stepsOverridden.value = []
-            }
+          if (planCase.assertionScriptOverride) {
+            caseData.value.assertionScript = planCase.assertionScriptOverride
+            extractors.value = parseExtractorsFromScript(planCase.assertionScriptOverride)
           } else {
-            stepsOverridden.value = []
+            extractors.value = []
           }
         } else {
-          // Case not found in plan, use template
-          caseData.value = JSON.parse(JSON.stringify(template))
-          stepsOverridden.value = []
+          parameterList.value = []
+          extractors.value = []
         }
       } catch (e) {
         console.error('Failed to load plan overrides:', e)
-        // Fallback to template
         caseData.value = JSON.parse(JSON.stringify(template))
-        stepsOverridden.value = []
       }
     } else {
-      // Not in plan mode, use template as-is
       caseData.value = JSON.parse(JSON.stringify(template))
-      stepsOverridden.value = []
     }
   } catch (error) {
     ElMessage.error('Failed to load case data')
@@ -336,28 +366,85 @@ const handleStepOverrideConfirm = (override) => {
   }
 }
 
+// Extractor Management
+const addExtractor = () => {
+  extractors.value.push({ variable: '', source: 'json', expression: '' })
+}
+
+const removeExtractor = (index) => {
+  extractors.value.splice(index, 1)
+}
+
+const parseExtractorsFromScript = (script) => {
+  const extracted = []
+  if (!script) return extracted
+  const lines = script.split('\n')
+  for (const line of lines) {
+    const jsonMatch = line.match(/vars\.put\s*\(\s*["']([^"']+)["']\s*,\s*jsonPath\s*\(\s*response\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)/)
+    if (jsonMatch) {
+      extracted.push({ variable: jsonMatch[1], source: 'json', expression: jsonMatch[2] })
+      continue
+    }
+    const regexMatch = line.match(/vars\.put\s*\(\s*["']([^"']+)["']\s*,\s*regex\s*\(\s*response\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)/)
+    if (regexMatch) {
+      extracted.push({ variable: regexMatch[1], source: 'regex', expression: regexMatch[2] })
+      continue
+    }
+    const headerMatch = line.match(/vars\.put\s*\(\s*["']([^"']+)["']\s*,\s*headers\s*\[\s*["']([^"']+)["']\s*\]\s*\)/)
+    if (headerMatch) {
+      extracted.push({ variable: headerMatch[1], source: 'header', expression: headerMatch[2] })
+    }
+  }
+  return extracted
+}
+
+const compileExtractorsToScript = () => {
+  let script = ''
+  extractors.value.forEach(ext => {
+    if (!ext.variable || !ext.expression) return
+    if (ext.source === 'json') script += `vars.put("${ext.variable}", jsonPath(response, '${ext.expression}'))\n`
+    else if (ext.source === 'regex') script += `vars.put("${ext.variable}", regex(response, '${ext.expression}'))\n`
+    else if (ext.source === 'header') script += `vars.put("${ext.variable}", headers["${ext.expression}"])\n`
+  })
+  return script.trim()
+}
+
+// Parameter Override Management
+const addParameter = () => {
+  parameterList.value.push({ key: '', value: '' })
+}
+
+const removeParameter = (index) => {
+  parameterList.value.splice(index, 1)
+}
+
 const saveChanges = async () => {
   if (!caseData.value) return
   
   saving.value = true
   try {
     if (props.planId) {
-      // Save Overrides
+      // Compile extractors into assertion script
+      const extractorScript = compileExtractorsToScript()
+      const currentScript = caseData.value.assertionScript || ''
+      const assertionLines = currentScript.split('\n').filter(line => !line.includes('vars.put'))
+      const finalAssertionScript = [...assertionLines, extractorScript].join('\n').trim()
+
+      // Compile parameters into JSON
+      const paramsObj = {}
+      parameterList.value.forEach(p => { if (p.key) paramsObj[p.key] = p.value })
+
       const overrides = {
         planId: props.planId,
         caseId: caseData.value.id,
-        caseNameOverride: isOverridden('caseName') ? caseData.value.caseName : null,
-        urlOverride: isOverridden('url') ? caseData.value.url : null,
-        methodOverride: isOverridden('method') ? caseData.value.method : null,
-        assertionScriptOverride: isOverridden('assertionScript') ? caseData.value.assertionScript : null,
-        stepsOverride: stepsOverridden.value.length > 0 ? JSON.stringify(stepsOverridden.value) : null,
+        parameterOverrides: JSON.stringify(paramsObj),
+        assertionScriptOverride: finalAssertionScript,
         enabled: true
       }
       
-      await testPlanApi.saveCaseOverrides(props.planId, caseData.value.id, overrides)
-      ElMessage.success('Plan overrides saved')
+      await testPlanApi.saveCaseParameters(props.planId, caseData.value.id, overrides)
+      ElMessage.success('Plan configuration saved')
     } else {
-      // Normal Update
       await testCaseApi.update(caseData.value.id, caseData.value)
       ElMessage.success('Case updated successfully')
     }
@@ -509,5 +596,90 @@ const saveChanges = async () => {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 30px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: #909399;
+  margin: -10px 0 15px 0;
+}
+
+.variable-helper {
+  margin: 15px 0;
+  font-size: 13px;
+  color: #606266;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.var-tag {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.var-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.step-summary {
+  margin-bottom: 5px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.step-index-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background-color: #909399;
+  color: white;
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.step-url-mini {
+  font-family: monospace;
+  font-size: 11px;
+  color: #606266;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.source-info {
+  padding: 10px;
+  background-color: #f8f9fb;
+  border-radius: 4px;
+}
+
+.info-row {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.info-label {
+  font-size: 13px;
+  font-weight: bold;
+  color: #606266;
+  min-width: 80px;
+}
+
+.info-group {
+  margin-top: 12px;
+}
+
+.info-value {
+  font-family: monospace;
+  font-size: 13px;
+  color: #303133;
 }
 </style>

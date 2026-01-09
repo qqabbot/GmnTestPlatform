@@ -3,27 +3,19 @@ package com.testing.automation.dto;
 import lombok.Data;
 
 /**
- * DTO for Test Plan specific overrides of a Test Case
- * Stores plan-specific modifications without polluting original test_case table
+ * DTO for Test Plan specific parameter configuration
+ * Simplified: Only handles parameter passing between cases
  */
 @Data
 public class TestPlanCaseOverride {
     private Long planId;
     private Long caseId;
 
-    // Case-level overrides
-    private String caseNameOverride;
-    private String urlOverride;
-    private String methodOverride;
-    private String headersOverride;
-    private String bodyOverride;
-    private String assertionScriptOverride;
-
-    // Step-level overrides (JSON array)
-    private String stepsOverride;
-
-    // Parameter overrides (existing field)
+    // Parameter overrides (JSON for parameter mapping)
     private String parameterOverrides;
+
+    // Logic (assertion/extractor) override
+    private String assertionScriptOverride;
 
     // Enable/disable case in this plan
     private Boolean enabled;

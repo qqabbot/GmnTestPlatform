@@ -10,9 +10,18 @@ export default defineConfig({
         }
     },
     server: {
+        host: true,
         port: 8888,
         proxy: {
             '/api': {
+                target: 'http://localhost:7777',
+                changeOrigin: true
+            },
+            '/videos': {
+                target: 'http://localhost:7777',
+                changeOrigin: true
+            },
+            '/screenshots': {
                 target: 'http://localhost:7777',
                 changeOrigin: true
             }

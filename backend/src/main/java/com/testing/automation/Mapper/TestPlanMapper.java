@@ -43,17 +43,13 @@ public interface TestPlanMapper {
         @Delete("DELETE FROM test_plan WHERE id = #{id}")
         int deleteById(Long id);
 
-        // ManyToMany relationship with TestCase - includes all overrides
+        // ManyToMany relationship with TestCase - simplified but keeping logic
+        // overrides
         @Select("SELECT tc.*, " +
                         "tpc.parameter_overrides AS parameterOverrides, " +
-                        "tpc.case_name_override AS caseNameOverride, " +
-                        "tpc.url_override AS urlOverride, " +
-                        "tpc.method_override AS methodOverride, " +
-                        "tpc.headers_override AS headersOverride, " +
-                        "tpc.body_override AS bodyOverride, " +
                         "tpc.assertion_script_override AS assertionScriptOverride, " +
-                        "tpc.steps_override AS stepsOverride, " +
-                        "tpc.enabled AS planEnabled " +
+                        "tpc.enabled AS planEnabled, " +
+                        "tpc.case_order AS caseOrder " +
                         "FROM test_case tc " +
                         "INNER JOIN test_plan_cases tpc ON tc.id = tpc.case_id " +
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
@@ -63,25 +59,23 @@ public interface TestPlanMapper {
                         "WHERE tpc.plan_id = #{planId} ORDER BY tpc.case_order")
         List<Long> findCaseIdsByPlanId(Long planId);
 
-        @Insert("INSERT INTO test_plan_cases (plan_id, case_id, case_order, parameter_overrides) " +
-                        "VALUES (#{planId}, #{caseId}, #{order}, #{overrides})")
+        @Insert("INSERT INTO test_plan_cases (plan_id, case_id, case_order, parameter_overrides, assertion_script_override, enabled) "
+                        +
+                        "VALUES (#{planId}, #{caseId}, #{order}, #{overrides}, #{assertionOverride}, #{enabled})")
         int addCaseToPlan(@Param("planId") Long planId, @Param("caseId") Long caseId,
-                        @Param("order") Integer order, @Param("overrides") String overrides);
+                        @Param("order") Integer order, @Param("overrides") String overrides,
+                        @Param("assertionOverride") String assertionOverride, @Param("enabled") Boolean enabled);
 
         @Delete("DELETE FROM test_plan_cases WHERE plan_id = #{planId}")
         int removeCasesFromPlan(Long planId);
 
         @Update("UPDATE test_plan_cases SET " +
-                        "case_name_override = #{override.caseNameOverride}, " +
-                        "url_override = #{override.urlOverride}, " +
-                        "method_override = #{override.methodOverride}, " +
-                        "headers_override = #{override.headersOverride}, " +
-                        "body_override = #{override.bodyOverride}, " +
-                        "assertion_script_override = #{override.assertionScriptOverride}, " +
-                        "steps_override = #{override.stepsOverride}, " +
-                        "parameter_overrides = #{override.parameterOverrides}, " +
-                        "enabled = #{override.enabled} " +
+                        "parameter_overrides = #{parameterOverrides}, " +
+                        "assertion_script_override = #{assertionScriptOverride}, " +
+                        "enabled = #{enabled} " +
                         "WHERE plan_id = #{planId} AND case_id = #{caseId}")
-        int updateCaseOverrides(@Param("planId") Long planId, @Param("caseId") Long caseId,
-                        @Param("override") com.testing.automation.dto.TestPlanCaseOverride override);
+        int updateCaseParameters(@Param("planId") Long planId, @Param("caseId") Long caseId,
+                        @Param("parameterOverrides") String parameterOverrides,
+                        @Param("assertionScriptOverride") String assertionScriptOverride,
+                        @Param("enabled") Boolean enabled);
 }

@@ -66,6 +66,11 @@ const router = createRouter({
                     name: 'APIReports',
                     component: () => import('../views/TestReport.vue')
                 },
+                {
+                    path: '/testing/guide',
+                    name: 'ApiGuide',
+                    component: () => import('../views/ApiGuide.vue')
+                },
                 // UI Testing Routes
                 {
                     path: '/ui-testing/cases',

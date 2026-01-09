@@ -33,9 +33,9 @@ export const testPlanApi = {
         })
     },
 
-    // Save plan-specific overrides for a test case
-    saveCaseOverrides(planId, caseId, data) {
-        return request.post(`/test-plans/${planId}/cases/${caseId}/overrides`, data)
+    // Save plan-specific parameter configuration for a test case
+    saveCaseParameters(planId, caseId, data) {
+        return request.post(`/test-plans/${planId}/cases/${caseId}/parameters`, data)
     },
 
     // Analyze variables produced/consumed in a test plan

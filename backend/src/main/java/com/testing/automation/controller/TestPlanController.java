@@ -70,12 +70,13 @@ public class TestPlanController {
     }
 
     /**
-     * Save plan-specific overrides for a test case
+     * Save plan-specific parameter configuration for a test case
+     * Only handles parameter passing, not case overrides
      */
-    @PostMapping("/{id}/cases/{caseId}/overrides")
-    public ResponseEntity<Void> saveCaseOverrides(@PathVariable Long id, @PathVariable Long caseId,
-            @RequestBody com.testing.automation.dto.TestPlanCaseOverride overrides) {
-        testPlanService.saveCaseOverrides(id, caseId, overrides);
+    @PostMapping("/{id}/cases/{caseId}/parameters")
+    public ResponseEntity<Void> saveCaseParameters(@PathVariable Long id, @PathVariable Long caseId,
+            @RequestBody com.testing.automation.dto.TestPlanCaseOverride config) {
+        testPlanService.saveCaseParameters(id, caseId, config);
         return ResponseEntity.ok().build();
     }
 }

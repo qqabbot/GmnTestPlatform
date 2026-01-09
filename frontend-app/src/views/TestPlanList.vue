@@ -145,9 +145,6 @@
                       <el-button link type="success" size="small" @click="editCase(c, index)" title="Edit Case">
                         <el-icon><EditPen /></el-icon> Edit
                       </el-button>
-                      <el-button link type="primary" size="small" @click="configureParams(c, index)" title="Parameter Overrides">
-                        <el-icon><Setting /></el-icon> Params
-                      </el-button>
                       <el-divider direction="vertical" />
                       <el-button link size="small" @click="moveUp(index)" :disabled="index === 0"><el-icon><ArrowUp /></el-icon></el-button>
                       <el-button link size="small" @click="moveDown(index)" :disabled="index === selectedCases.length - 1"><el-icon><ArrowDown /></el-icon></el-button>
@@ -212,84 +209,6 @@
       </template>
     </el-dialog>
 
-    <!-- Parameter Config Dialog -->
-    <el-dialog v-model="paramDialogVisible" title="Configure Parameter Overrides" width="700px">
-      <!-- Available Variables Info -->
-      <div v-if="getAvailableVariables.length > 0" style="margin-bottom: 15px;">
-        <el-alert type="success" :closable="false">
-          <template #title>
-            <strong>Available Variables from Previous Steps:</strong>
-          </template>
-          <div style="margin-top: 8px;">
-            <el-tag v-for="varName in getAvailableVariables" :key="varName" 
-                    size="small" style="margin-right: 5px; margin-bottom: 5px">
-              ${ {{varName}} }
-            </el-tag>
-          </div>
-        </el-alert>
-      </div>
-
-      <!-- Structured Parameter Form -->
-      <div class="param-form">
-        <div class="param-header">
-          <h4>Parameter Overrides</h4>
-          <el-button type="primary" size="small" @click="addParamOverride">
-            <el-icon><Plus /></el-icon> Add Override
-          </el-button>
-        </div>
-        
-        <div v-if="Object.keys(paramOverrideMap).length === 0" class="empty-params">
-          <el-empty description="No parameter overrides. Click 'Add Override' to set custom values." :image-size="80" />
-        </div>
-        
-        <div v-else class="param-list">
-          <div v-for="(value, key) in paramOverrideMap" :key="key" class="param-item">
-            <el-input 
-              :model-value="key" 
-              @blur="(e) => updateParamKey(key, e.target.value)"
-              placeholder="Parameter name" 
-              size="default"
-              style="width: 200px; margin-right: 10px"
-            />
-            <span style="margin: 0 8px">=</span>
-            <el-input 
-              v-model="paramOverrideMap[key]" 
-              placeholder="Value" 
-              size="default"
-              style="flex: 1"
-            >
-              <template #prepend>
-                <el-icon><EditPen /></el-icon>
-              </template>
-            </el-input>
-            <el-button type="danger" link @click="removeParamOverride(key)" style="margin-left: 10px">
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Advanced JSON Editor (Collapsible) -->
-      <el-collapse style="margin-top: 20px;">
-        <el-collapse-item title="Advanced: Raw JSON Editor" name="1">
-          <el-input 
-            v-model="currentParamOverride" 
-            type="textarea" 
-            :rows="8" 
-            placeholder='{ "key": "value" }'
-          />
-          <div style="margin-top: 8px; font-size: 12px; color: #909399;">
-            Note: Changes here will override the structured form above when saved.
-          </div>
-        </el-collapse-item>
-      </el-collapse>
-
-      <template #footer>
-        <el-button @click="paramDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="saveParams">Save Overrides</el-button>
-      </template>
-    </el-dialog>
-
     <!-- Run Dialog -->
     <el-dialog v-model="runDialogVisible" title="Run Test Plan" width="400px">
       <el-form>
@@ -339,7 +258,7 @@ import { testModuleApi } from '../api/testModule'
 import { testCaseApi } from '../api/testCase'
 import { environmentApi } from '../api/environment'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowUp, ArrowDown, Plus, Delete, EditPen, Setting, Close } from '@element-plus/icons-vue'
+import { ArrowUp, ArrowDown, Plus, Delete, EditPen, Setting, Close, VideoPlay } from '@element-plus/icons-vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
 
 const loading = ref(false)
@@ -374,17 +293,11 @@ const currentRunPlan = ref(null)
 const resultDialogVisible = ref(false)
 const executionResults = ref([])
 
-// Parameter Config State
-const paramDialogVisible = ref(false)
-const currentParamOverride = ref('')
-const currentEditingCase = ref(null)
-const currentEditingCaseIndex = ref(-1)
-const expandedCaseIndex = ref(-1)
-const paramOverrideMap = ref({})
 // Case Drawer State
 const editingCaseId = ref(null)
 const editingCaseIndex = ref(-1)
 const showCaseDrawer = ref(false)
+const expandedCaseIndex = ref(-1)
 const planVariables = ref({}) // Store discovered variables per step index
 
 onMounted(async () => {
@@ -537,103 +450,11 @@ const analyzePlanVariables = async () => {
     try {
         const analysis = await testPlanApi.analyzeVariables(currentPlan.value.id)
         planVariables.value = analysis
+        planVariables.value = analysis || []
     } catch (e) {
         console.error('Failed to analyze variables:', e)
     }
 }
-
-const configureParams = (c, index) => {
-    currentEditingCase.value = c
-    currentEditingCaseIndex.value = index
-    
-    // Parse existing overrides into structured map
-    try {
-        if (c.parameterOverrides) {
-             const obj = JSON.parse(c.parameterOverrides)
-             paramOverrideMap.value = obj
-             currentParamOverride.value = JSON.stringify(obj, null, 2)
-        } else {
-             paramOverrideMap.value = {}
-             currentParamOverride.value = ''
-        }
-    } catch (e) {
-        paramOverrideMap.value = {}
-        currentParamOverride.value = c.parameterOverrides || ''
-    }
-    paramDialogVisible.value = true
-}
-
-const saveParams = () => {
-    // Construct JSON from paramOverrideMap
-    const jsonStr = Object.keys(paramOverrideMap.value).length > 0 
-        ? JSON.stringify(paramOverrideMap.value) 
-        : ''
-    
-    // Validate if using raw JSON editor
-    if (currentParamOverride.value.trim() && currentParamOverride.value !== jsonStr) {
-        try {
-            const parsed = JSON.parse(currentParamOverride.value)
-            paramOverrideMap.value = parsed
-        } catch (e) {
-             ElMessage.error('Invalid JSON format')
-             return
-        }
-    }
-    
-    // Save compressed JSON string
-    if (currentEditingCase.value) {
-        currentEditingCase.value.parameterOverrides = JSON.stringify(paramOverrideMap.value)
-    }
-    paramDialogVisible.value = false
-}
-
-const addParamOverride = () => {
-    paramOverrideMap.value['new_param'] = ''
-}
-
-const removeParamOverride = (key) => {
-    delete paramOverrideMap.value[key]
-}
-
-const updateParamKey = (oldKey, newKey) => {
-    if (oldKey !== newKey && newKey) {
-        paramOverrideMap.value[newKey] = paramOverrideMap.value[oldKey]
-        delete paramOverrideMap.value[oldKey]
-    }
-}
-
-// Get available variables from previous cases in the plan
-const getAvailableVariables = computed(() => {
-    if (currentEditingCaseIndex.value < 0) return []
-    
-    const vars = new Set(['base_url', 'timestamp'])
-    
-    for (let i = 0; i < currentEditingCaseIndex.value; i++) {
-        const prevCase = selectedCases.value[i]
-        
-        if (prevCase.assertionScript) {
-            const varPattern = /vars\.put\(["']([^"']+)["']/g
-            let match
-            while ((match = varPattern.exec(prevCase.assertionScript)) !== null) {
-                vars.add(match[1])
-            }
-        }
-        
-        if (prevCase.steps) {
-            prevCase.steps.forEach(step => {
-                if (step.assertionScript) {
-                    const varPattern = /vars\.put\(["']([^"']+)["']/g
-                    let match
-                    while ((match = varPattern.exec(step.assertionScript)) !== null) {
-                        vars.add(match[1])
-                    }
-                }
-            })
-        }
-    }
-    
-    return Array.from(vars).sort()
-})
 
 
 const handleCaseSaved = async (updatedCase) => {
@@ -799,6 +620,105 @@ const executePlan = async () => {
 .filter-bar {
   margin-bottom: 20px;
 }
+
+/* View Controls */
+.view-controls {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Card Grid Layout */
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+  padding: 10px 0;
+}
+
+.plan-card {
+  transition: all 0.3s ease;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.plan-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.plan-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plan-card .card-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.plan-card .more-icon {
+  cursor: pointer;
+  font-size: 20px;
+  color: #909399;
+  transition: color 0.2s;
+}
+
+.plan-card .more-icon:hover {
+  color: #409eff;
+}
+
+.plan-info {
+  padding: 15px 0;
+  min-height: 100px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.info-item .el-icon {
+  font-size: 18px;
+}
+
+.plan-description {
+  margin-top: 12px;
+  padding: 10px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 60px 0;
+}
+
 .edit-container {
   display: flex;
   flex-direction: column;
@@ -1009,4 +929,262 @@ const executePlan = async () => {
   border-radius: 4px;
   border: 1px solid #e4e7ed;
 }
+
+/* Wizard Dialog Styles */
+.wizard-dialog .wizard-steps {
+  margin: 30px 0;
+  padding: 0 60px;
+}
+
+.wizard-content {
+  padding: 20px 60px;
+  min-height: 500px;
+}
+
+.step-panel {
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.step-title {
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.step-title h3 {
+  margin: 0 0 10px 0;
+  font-size: 24px;
+  color: #303133;
+}
+
+.step-title p {
+  margin: 0;
+  color: #909399;
+  font-size: 14px;
+}
+
+.wizard-form {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+}
+
+.wizard-nav {
+  display: flex;
+  gap: 10px;
+}
+
+/* Selection Panel (Step 2) */
+.project-required-msg {
+  padding: 60px;
+}
+
+.selection-panel {
+  min-height: 500px;
+}
+
+.selection-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.selection-stats {
+  display: flex;
+  gap: 10px;
+}
+
+.selection-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.available-cases h4 {
+  margin: 0 0 15px 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.case-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  max-height: 450px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.case-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background-color: #fff;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.case-checkbox-item:hover {
+  background-color: #f5f7fa;
+  border-color: #409eff;
+}
+
+.case-checkbox-item.is-selected {
+  background-color: #ecf5ff;
+  border-color: #409eff;
+}
+
+.case-checkbox-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.case-checkbox-name {
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.case-checkbox-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.case-checkbox-meta .case-url {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.case-pagination-wizard {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+}
+
+.empty-selection {
+  padding: 60px;
+  text-align: center;
+}
+
+/* Order Config Panel (Step 3) */
+.order-config-panel {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.order-case-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  margin-bottom: 12px;
+  background-color: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.order-case-item:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border-color: #409eff;
+}
+
+.order-item-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.drag-handle {
+  cursor: move;
+  font-size: 20px;
+  color: #909399;
+}
+
+.order-badge {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #409eff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.order-case-info {
+  flex: 1;
+}
+
+.order-case-name {
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.order-case-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.order-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Review Panel (Step 4) */
+.review-descriptions {
+  margin-bottom: 30px;
+}
+
+.review-timeline h4 {
+  margin: 20px 0 15px 0;
+  color: #303133;
+}
+
+.timeline-case {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.param-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #e6a23c;
+}
+
 </style>

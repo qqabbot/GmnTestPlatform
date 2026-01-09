@@ -12,7 +12,7 @@ public class Assertion {
     private Long stepId;
     @JsonIgnoreProperties("assertions")
     private TestStep testStep;
-    private String type;
+    private String type = "script"; // Default type for assertions
     private String expression;
     private String expectedValue;
     private LocalDateTime createdAt = LocalDateTime.now();

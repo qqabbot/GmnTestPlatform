@@ -206,7 +206,7 @@ vars.put("new_token", jsonPath(response, "$.token"))</pre>
            <monaco-editor v-model="step.assertionScript" language="groovy" height="400px" />
            <div class="help-text">
              Groovy script for advanced assertions and variable extraction.<br>
-             Note: Changes here will NOT sync back to the Assertions/Extractors UI cards.
+             Note: Script and Assertions/Extractors UI are synchronized. Changes in script will be parsed and shown in UI, and vice versa.
            </div>
         </el-tab-pane>
 
@@ -219,7 +219,7 @@ vars.put("new_token", jsonPath(response, "$.token"))</pre>
 </template>
 
 <script setup>
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted, nextTick } from 'vue'
 import MonacoEditor from './MonacoEditor.vue'
 import VariableInput from './VariableInput.vue'
 import { testCaseApi } from '../api/testCase'
@@ -306,9 +306,73 @@ onUnmounted(() => {
 })
 
 // Watch for changes in UI lists and update step + emit (Moved here to ensure debounceEmit is defined)
+// Parse script to extract assertions and extractors
+const parseScript = (script) => {
+  if (!script || !script.trim()) {
+    return { assertions: [], extractors: [] }
+  }
+  
+  const parsedAssertions = []
+  const parsedExtractors = []
+  const lines = script.split('\n')
+  
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('//')) continue
+    
+    // Parse extractors: vars.put("varName", jsonPath(response, 'path'))
+    const extractorMatch = trimmed.match(/vars\.put\s*\(\s*"([^"]+)"\s*,\s*jsonPath\s*\(\s*response\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)/)
+    if (extractorMatch) {
+      parsedExtractors.push({
+        source: 'json',
+        expression: extractorMatch[2],
+        variable: extractorMatch[1]
+      })
+      continue
+    }
+    
+    // Parse assertions: assert status_code == 200
+    const statusAssertMatch = trimmed.match(/assert\s+status_code\s+([!=<>]+)\s+(.+)/)
+    if (statusAssertMatch) {
+      parsedAssertions.push({
+        source: 'status',
+        operator: statusAssertMatch[1],
+        expected: statusAssertMatch[2].trim()
+      })
+      continue
+    }
+    
+    // Parse assertions: assert jsonPath(response, "path") == "value"
+    const jsonAssertMatch = trimmed.match(/assert\s+jsonPath\s*\(\s*response\s*,\s*['"]([^'"]+)['"]\s*\)\s+([!=<>]+)\s+['"]([^'"]+)['"]/)
+    if (jsonAssertMatch) {
+      parsedAssertions.push({
+        source: 'json',
+        property: jsonAssertMatch[1],
+        operator: jsonAssertMatch[2],
+        expected: jsonAssertMatch[3]
+      })
+      continue
+    }
+    
+    // Parse assertions: assert headers["key"] == "value"
+    const headerAssertMatch = trimmed.match(/assert\s+headers\s*\[\s*['"]([^'"]+)['"]\s*\]\s+([!=<>]+)\s+['"]([^'"]+)['"]/)
+    if (headerAssertMatch) {
+      parsedAssertions.push({
+        source: 'header',
+        property: headerAssertMatch[1],
+        operator: headerAssertMatch[2],
+        expected: headerAssertMatch[3]
+      })
+      continue
+    }
+  }
+  
+  return { assertions: parsedAssertions, extractors: parsedExtractors }
+}
+
 // Watch for UI lists changes -> Compile script + Sync UI state
 watch([assertions, extractors], () => {
-  if (!step.value) return
+  if (!step.value || isInitializing.value) return
   
   // Save UI state
   step.value._ui_assertions = assertions.value
@@ -328,20 +392,102 @@ watch([assertions, extractors], () => {
       extractors.value.forEach(e => {
         if (e.source === 'json' && e.variable) {
           let varName = e.variable.trim()
+          // Clean variable name
           if (varName.startsWith('${') && varName.endsWith('}')) {
             varName = varName.substring(2, varName.length - 1)
-          } else if (varName.startsWith('{') && varName.endsWith('}')) {
-            varName = varName.substring(1, varName.length - 1)
           } else if (varName.startsWith('$')) {
             varName = varName.substring(1)
           }
-          script += `vars.put("${varName}", jsonPath(response, '${e.expression}'))\n`
+          
+          let expr = e.expression.trim()
+          // Auto-clean ${} from expression if present
+          if (expr.startsWith('${') && expr.endsWith('}')) {
+             expr = expr.substring(2, expr.length - 1)
+          }
+          
+          // Use single quotes for the path to avoid GString interpolation issues with $
+          script += `vars.put("${varName}", jsonPath(response, '${expr}'))\n`
         }
       })
       step.value.assertionScript = script
+  } else if (assertions.value.length === 0 && extractors.value.length === 0) {
+    // Only clear script if UI lists are empty AND script doesn't contain manual code
+    // This allows users to write custom script without UI interference
+    const currentScript = step.value.assertionScript || ''
+    const parsed = parseScript(currentScript)
+    // If script can be fully parsed into UI elements, clear it
+    // Otherwise, keep the manual script (e.g., vars.put() only)
+    if (parsed.assertions.length === 0 && parsed.extractors.length === 0) {
+      // Don't clear script if it contains vars.put() or other manual code
+      // Only clear if it's truly empty or only whitespace
+      if (!currentScript.trim()) {
+        step.value.assertionScript = ''
+      }
+      // If script contains vars.put() but wasn't parsed, it means it's manual code
+      // Keep it as is - don't clear
+    }
   }
   // No emit here. The modification to 'step' will trigger the step watcher below.
 }, { deep: true })
+
+// Watch for script changes -> Parse and update UI lists
+watch(() => step.value?.assertionScript, (newScript, oldScript) => {
+  if (!step.value || isInitializing.value) return
+  // Only parse if script was manually edited (not from UI compilation)
+  if (newScript === oldScript) return
+  
+  const parsed = parseScript(newScript)
+  // Only update UI if script can be fully parsed
+  // This prevents overwriting manual script with UI elements
+  const canFullyParse = newScript && newScript.trim() && 
+    (parsed.assertions.length > 0 || parsed.extractors.length > 0)
+  
+  if (canFullyParse) {
+    // Check if UI lists are different from parsed result
+    const uiScript = compileToScript(assertions.value, extractors.value)
+    if (uiScript.trim() !== (newScript || '').trim()) {
+      // Script was manually edited, update UI to match
+      isInitializing.value = true
+      assertions.value = parsed.assertions
+      extractors.value = parsed.extractors
+      step.value._ui_assertions = parsed.assertions
+      step.value._ui_extractors = parsed.extractors
+      nextTick(() => {
+        isInitializing.value = false
+      })
+    }
+  }
+})
+
+// Helper function to compile UI lists to script
+const compileToScript = (assertionsList, extractorsList) => {
+  let script = ""
+  assertionsList.forEach(a => {
+    if (a.source === 'status') {
+      script += `assert status_code ${a.operator} ${a.expected}\n`
+    } else if (a.source === 'json') {
+      script += `assert jsonPath(response, "${a.property}") ${a.operator} "${a.expected}"\n`
+    } else if (a.source === 'header') {
+      script += `assert headers["${a.property}"] ${a.operator} "${a.expected}"\n`
+    }
+  })
+  extractorsList.forEach(e => {
+    if (e.source === 'json' && e.variable) {
+      let varName = e.variable.trim()
+      if (varName.startsWith('${') && varName.endsWith('}')) {
+        varName = varName.substring(2, varName.length - 1)
+      } else if (varName.startsWith('$')) {
+        varName = varName.substring(1)
+      }
+      let expr = e.expression.trim()
+      if (expr.startsWith('${') && expr.endsWith('}')) {
+         expr = expr.substring(2, expr.length - 1)
+      }
+      script += `vars.put("${varName}", jsonPath(response, '${expr}'))\n`
+    }
+  })
+  return script
+}
 
 // Watch for any changes in step (including those caused by the watcher above) and emit
 watch(step, () => {
@@ -432,8 +578,20 @@ watch(() => props.modelValue, async (val) => {
       isInitializing.value = true
       
       step.value = JSON.parse(JSON.stringify(val))
-      assertions.value = step.value._ui_assertions || []
-      extractors.value = step.value._ui_extractors || []
+      // Try to parse script first, then fall back to saved UI state
+      const script = step.value.assertionScript || ''
+      const parsed = parseScript(script)
+      
+      // If script can be parsed, use parsed values; otherwise use saved UI state
+      if (parsed.assertions.length > 0 || parsed.extractors.length > 0) {
+        assertions.value = parsed.assertions
+        extractors.value = parsed.extractors
+        step.value._ui_assertions = parsed.assertions
+        step.value._ui_extractors = parsed.extractors
+      } else {
+        assertions.value = step.value._ui_assertions || []
+        extractors.value = step.value._ui_extractors || []
+      }
       
       // Determine step type
       if (step.value.referenceCaseId) {

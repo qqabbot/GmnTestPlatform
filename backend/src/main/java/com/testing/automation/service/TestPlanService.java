@@ -55,31 +55,13 @@ public class TestPlanService {
         // Let's merge the details into the already fetched cases to keep
         // parameterOverrides.
         if (plan.getTestCases() != null) {
-            for (TestCase tc : plan.getTestCases()) {
-                TestCase details = caseMapper.findByIdWithDetails(tc.getId());
-                if (details != null) {
-                    // Update details with overrides from the join table fetch
-                    // Copy basic fields but keep the overrides
-                    details.setParameterOverrides(tc.getParameterOverrides());
-                    // Replace in list or update in place?
-                    // Let's update the plan list directly if it's mutable.
-                }
-            }
-            // Actually, findCasesByPlanId already returned TestCase objects with overrides.
-            // We just need to enrich them with steps and preserve all overrides.
+            // Enrich cases with steps and preserve active overrides
             for (int i = 0; i < plan.getTestCases().size(); i++) {
                 TestCase tc = plan.getTestCases().get(i);
                 TestCase details = caseMapper.findByIdWithDetails(tc.getId());
                 if (details != null) {
-                    // Preserve ALL overrides from the plan-case relationship
                     details.setParameterOverrides(tc.getParameterOverrides());
-                    details.setCaseNameOverride(tc.getCaseNameOverride());
-                    details.setUrlOverride(tc.getUrlOverride());
-                    details.setMethodOverride(tc.getMethodOverride());
-                    details.setHeadersOverride(tc.getHeadersOverride());
-                    details.setBodyOverride(tc.getBodyOverride());
                     details.setAssertionScriptOverride(tc.getAssertionScriptOverride());
-                    details.setStepsOverride(tc.getStepsOverride());
                     details.setPlanEnabled(tc.getPlanEnabled());
                     plan.getTestCases().set(i, details);
                 }
@@ -98,7 +80,8 @@ public class TestPlanService {
         if (plan.getTestCases() != null) {
             for (int i = 0; i < plan.getTestCases().size(); i++) {
                 TestCase testCase = plan.getTestCases().get(i);
-                planMapper.addCaseToPlan(plan.getId(), testCase.getId(), i, testCase.getParameterOverrides());
+                planMapper.addCaseToPlan(plan.getId(), testCase.getId(), i, testCase.getParameterOverrides(),
+                        testCase.getAssertionScriptOverride(), testCase.getPlanEnabled());
             }
         }
         return plan;
@@ -122,7 +105,8 @@ public class TestPlanService {
         if (updatedPlan.getTestCases() != null) {
             for (int i = 0; i < updatedPlan.getTestCases().size(); i++) {
                 TestCase testCase = updatedPlan.getTestCases().get(i);
-                planMapper.addCaseToPlan(id, testCase.getId(), i, testCase.getParameterOverrides());
+                planMapper.addCaseToPlan(id, testCase.getId(), i, testCase.getParameterOverrides(),
+                        testCase.getAssertionScriptOverride(), testCase.getPlanEnabled());
             }
         }
 
@@ -136,12 +120,13 @@ public class TestPlanService {
     }
 
     /**
-     * Save plan-specific overrides for a test case
+     * Save plan-specific parameter configuration for a test case
      * This does NOT modify the original test_case table
      */
     @Transactional
-    public void saveCaseOverrides(Long planId, Long caseId, TestPlanCaseOverride overrides) {
-        planMapper.updateCaseOverrides(planId, caseId, overrides);
+    public void saveCaseParameters(Long planId, Long caseId, TestPlanCaseOverride config) {
+        planMapper.updateCaseParameters(planId, caseId, config.getParameterOverrides(),
+                config.getAssertionScriptOverride(), config.getEnabled());
     }
 
     /**
@@ -158,6 +143,15 @@ public class TestPlanService {
         Map<Long, TestResult> executionHistory = new HashMap<>();
 
         for (TestCase testCase : plan.getTestCases()) {
+            if (testCase.getPlanEnabled() != null && !testCase.getPlanEnabled()) {
+                results.add(TestResult.builder()
+                        .caseId(testCase.getId())
+                        .caseName(testCase.getCaseName())
+                        .status("SKIPPED")
+                        .message("Disabled in Plan")
+                        .build());
+                continue;
+            }
             try {
                 // Create a COPY of runtime variables for this step to avoid polluting the
                 // global scope permanently?
@@ -254,7 +248,7 @@ public class TestPlanService {
         }
 
         // Check each step's assertion script
-        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        List<TestStep> effectiveSteps = testCase.getSteps();
         if (effectiveSteps != null) {
             for (TestStep step : effectiveSteps) {
                 if (step.getAssertionScript() != null) {
@@ -277,23 +271,23 @@ public class TestPlanService {
         Pattern variablePattern = Pattern.compile("\\$\\{([^}]+)\\}");
 
         // Check URL
-        if (testCase.getEffectiveUrl() != null) {
-            Matcher matcher = variablePattern.matcher(testCase.getEffectiveUrl());
+        if (testCase.getUrl() != null) {
+            Matcher matcher = variablePattern.matcher(testCase.getUrl());
             while (matcher.find()) {
                 variables.add(matcher.group(1));
             }
         }
 
         // Check body
-        if (testCase.getEffectiveBody() != null) {
-            Matcher matcher = variablePattern.matcher(testCase.getEffectiveBody());
+        if (testCase.getBody() != null) {
+            Matcher matcher = variablePattern.matcher(testCase.getBody());
             while (matcher.find()) {
                 variables.add(matcher.group(1));
             }
         }
 
         // Check steps
-        List<TestStep> effectiveSteps = testCase.getEffectiveSteps();
+        List<TestStep> effectiveSteps = testCase.getSteps();
         if (effectiveSteps != null) {
             for (TestStep step : effectiveSteps) {
                 if (step.getUrl() != null) {

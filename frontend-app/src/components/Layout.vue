@@ -51,6 +51,10 @@
             <el-icon><Tickets /></el-icon>
             <span>Reports</span>
           </el-menu-item>
+          <el-menu-item index="/testing/guide">
+            <el-icon><Document /></el-icon>
+            <span>操作指南</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- UI Testing -->
@@ -178,6 +182,7 @@ const pageTitle = computed(() => {
     '/testing/cases': 'API Testing - Test Cases',
     '/testing/execution': 'API Testing - Execution',
     '/testing/reports': 'API Testing - Reports',
+    '/testing/guide': 'API Testing - User Guide',
     '/ui-testing/cases': 'UI Testing - Test Cases',
     '/ui-testing/cases/new': 'UI Testing - New Case',
     '/ui-testing/reports': 'UI Testing - Reports',
