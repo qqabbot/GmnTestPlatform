@@ -230,7 +230,7 @@ public class TestCaseService {
 
     // Dry Run
     public DryRunResponse dryRunTestCase(Long caseId, String envKey) {
-        TestCase testCase = caseMapper.findById(caseId);
+        TestCase testCase = caseMapper.findByIdWithDetails(caseId);
         if (testCase == null) {
             throw new RuntimeException("Test case not found: " + caseId);
         }
@@ -246,6 +246,12 @@ public class TestCaseService {
         }
         Map<String, Object> runtimeVariables = globalVariableService.getVariablesMapWithInheritance(
                 projectId, moduleId, envKey);
+
+        // Execute setup script during dry run if present
+        if (testCase.getSetupScript() != null && !testCase.getSetupScript().isEmpty()) {
+            System.out.println("Executing Pre-request Script in Dry Run for case: " + testCase.getCaseName());
+            executeScript(testCase.getSetupScript(), runtimeVariables);
+        }
 
         String resolvedUrl = replaceVariables(testCase.getUrl(), runtimeVariables);
         String resolvedBody = testCase.getBody() != null ? replaceVariables(testCase.getBody(), runtimeVariables)
@@ -934,25 +940,27 @@ public class TestCaseService {
             engine.put("vars", vars);
 
             // Provide jsonPath helper function with improved hyphenated key support
-            engine.eval("def jsonPath(responseObj, path) { " +
-                    "  try { " +
-                    "    def body = (responseObj instanceof com.testing.automation.dto.TestResponse) ? responseObj.getBody() : responseObj.toString(); "
+            engine.eval("def jsonPath(responseObj, path) {\n" +
+                    "  try {\n" +
+                    "    def body = (responseObj instanceof com.testing.automation.dto.TestResponse) ? responseObj.getBody() : responseObj.toString();\n"
                     +
-                    "    return com.jayway.jsonpath.JsonPath.read(body ?: '{}', path); " +
-                    "  } catch (Exception e) { " +
-                    "    System.err.println('jsonPath error for path [' + path + ']: ' + e.getMessage()); " +
-                    "    return null; " +
-                    "  }" +
+                    "    return com.jayway.jsonpath.JsonPath.read(body ?: '{}', path);\n" +
+                    "  } catch (Exception e) {\n" +
+                    "    System.err.println('jsonPath error for path [' + path + ']: ' + e.getMessage());\n" +
+                    "    return null;\n" +
+                    "  }\n" +
                     "}");
 
             // Provide regex helper function
-            engine.eval("def regex(text, pattern) { " +
-                    "  if (text == null) return null; " +
-                    "  def matcher = (text =~ pattern); " +
-                    "  if (matcher.find() && matcher.groupCount() > 0) { " +
-                    "    return matcher.group(1); " +
-                    "  } " +
-                    "  return null; " +
+            engine.eval("def regex(text, pattern) {\n" +
+                    "  if (text == null) return null;\n" +
+                    "  def matcher = (text =~ pattern);\n" +
+                    "  if (matcher.find()) {\n" +
+                    "    if (matcher.groupCount() > 0) {\n" +
+                    "      return matcher.group(1);\n" +
+                    "    }\n" +
+                    "  }\n" +
+                    "  return null;\n" +
                     "}");
 
             // Add all runtime variables to script context

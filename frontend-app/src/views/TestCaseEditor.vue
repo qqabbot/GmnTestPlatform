@@ -916,11 +916,16 @@ const handleRun = () => {
 
 const executeDryRun = async () => {
   if (isUnmounted.value) return
-  await store.runDryRun(dryRunEnv.value)
-  if (isUnmounted.value) return
-  isDryRun.value = true
-  showDryRunDialog.value = false
-  showResult.value = true
+  try {
+    await store.saveCase()
+    await store.runDryRun(dryRunEnv.value)
+    if (isUnmounted.value) return
+    isDryRun.value = true
+    showDryRunDialog.value = false
+    showResult.value = true
+  } catch (error) {
+    // Error already handled by store/message
+  }
 }
 
 const executeRun = async () => {
