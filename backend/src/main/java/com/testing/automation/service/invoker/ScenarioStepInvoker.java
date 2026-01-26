@@ -7,10 +7,10 @@ import com.testing.automation.dto.TestScenarioStepDTO;
 import com.testing.automation.service.ScenarioExecutionEngine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 public class ScenarioStepInvoker implements StepInvoker {
     
     @Autowired
+    @Lazy
     private ScenarioExecutionEngine executionEngine;
     
     @Override

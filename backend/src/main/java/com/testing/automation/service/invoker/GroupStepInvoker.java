@@ -6,6 +6,7 @@ import com.testing.automation.dto.TestResult;
 import com.testing.automation.dto.TestScenarioStepDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.function.Consumer;
 public class GroupStepInvoker implements StepInvoker {
     
     @Autowired
+    @Lazy
     private StepInvokerRegistry invokerRegistry;
     
     @Override
