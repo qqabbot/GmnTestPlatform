@@ -47,6 +47,11 @@ const router = createRouter({
                     component: () => import('../views/TestCaseList.vue')
                 },
                 {
+                    path: '/testing/scenarios/:id',
+                    name: 'ScenarioEditor',
+                    component: () => import('../views/ScenarioEditor.vue')
+                },
+                {
                     path: '/testing/cases/new',
                     name: 'NewAPITestCase',
                     component: () => import('../views/TestCaseEditor.vue')

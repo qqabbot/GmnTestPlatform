@@ -43,5 +43,10 @@ export const testCaseApi = {
     // Execute test cases
     execute(params) {
         return request.post('/cases/execute', null, { params })
+    },
+
+    getExecuteStreamUrl(params) {
+        const query = new URLSearchParams(params).toString()
+        return `${import.meta.env.VITE_API_BASE_URL}/cases/execute/stream?${query}`
     }
 }

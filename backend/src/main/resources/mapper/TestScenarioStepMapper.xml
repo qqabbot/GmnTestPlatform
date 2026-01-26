@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.testing.automation.Mapper.TestScenarioStepMapper">
+
+    <resultMap id="BaseResultMap" type="com.testing.automation.model.TestScenarioStep">
+        <id column="id" property="id"/>
+        <result column="scenario_id" property="scenarioId"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="type" property="type"/>
+        <result column="name" property="name"/>
+        <result column="reference_case_id" property="referenceCaseId"/>
+        <result column="control_logic" property="controlLogic"/>
+        <result column="data_overrides" property="dataOverrides"/>
+        <result column="order_index" property="orderIndex"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="findByScenarioId" resultMap="BaseResultMap">
+        SELECT * FROM test_scenario_steps 
+        WHERE scenario_id = #{scenarioId} 
+        ORDER BY order_index ASC
+    </select>
+
+    <select id="findById" resultMap="BaseResultMap">
+        SELECT * FROM test_scenario_steps WHERE id = #{id}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO test_scenario_steps (
+            scenario_id, parent_id, type, name, reference_case_id, 
+            control_logic, data_overrides, order_index, created_at, updated_at
+        )
+        VALUES (
+            #{scenarioId}, #{parentId}, #{type}, #{name}, #{referenceCaseId}, 
+            #{controlLogic}, #{dataOverrides}, #{orderIndex}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE test_scenario_steps
+        SET parent_id = #{parentId},
+            type = #{type},
+            name = #{name},
+            reference_case_id = #{referenceCaseId},
+            control_logic = #{controlLogic},
+            data_overrides = #{dataOverrides},
+            order_index = #{orderIndex},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM test_scenario_steps WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByScenarioId">
+        DELETE FROM test_scenario_steps WHERE scenario_id = #{scenarioId}
+    </delete>
+
+</mapper>

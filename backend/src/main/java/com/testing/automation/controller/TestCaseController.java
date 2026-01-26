@@ -1,17 +1,21 @@
 package com.testing.automation.controller;
 
+import com.testing.automation.dto.ScenarioExecutionEvent;
 import com.testing.automation.dto.TestResult;
 import com.testing.automation.model.TestCase;
 import com.testing.automation.model.TestStep;
 import com.testing.automation.service.TestCaseService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 // 假设我们使用 Lombok 注解，实际项目中需引入 Lombok 依赖
 @RestController
@@ -22,8 +26,11 @@ public class TestCaseController {
     @Autowired
     private TestCaseService testCaseService;
 
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+
     // Groovy 引擎实例 (线程安全问题需要注意，在实际应用中，通常使用线程池或引擎工厂管理)
-    private final ScriptEngine groovyEngine = new ScriptEngineManager().getEngineByName("groovy");
+    private final javax.script.ScriptEngine groovyEngine = new javax.script.ScriptEngineManager()
+            .getEngineByName("groovy");
 
     // =========================================================================
     // CRUD 接口 (用例管理)
@@ -40,12 +47,12 @@ public class TestCaseController {
         if (newCase.getModuleId() == null && newCase.getModule() != null && newCase.getModule().getId() != null) {
             newCase.setModuleId(newCase.getModule().getId());
         }
-        
+
         // Validate moduleId is present
         if (newCase.getModuleId() == null) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         // Fix bidirectional relationship: set testCase reference in each step
         if (newCase.getSteps() != null) {
             for (TestStep step : newCase.getSteps()) {
@@ -73,9 +80,9 @@ public class TestCaseController {
      * 使用 /project 路径避免与 /{id} 冲突
      * 
      * @param projectId 项目 ID
-     * @param page 页码（从0开始）
-     * @param size 每页大小
-     * @param keyword 搜索关键词（可选）
+     * @param page      页码（从0开始）
+     * @param size      每页大小
+     * @param keyword   搜索关键词（可选）
      */
     @GetMapping("/project")
     public ResponseEntity<Map<String, Object>> getCasesByProject(
@@ -121,14 +128,14 @@ public class TestCaseController {
         existingCase.setSetupScript(updatedCase.getSetupScript());
         existingCase.setAssertionScript(updatedCase.getAssertionScript());
         existingCase.setIsActive(updatedCase.getIsActive());
-        
+
         // Extract moduleId from nested module object if present, or use direct moduleId
         if (updatedCase.getModule() != null && updatedCase.getModule().getId() != null) {
             existingCase.setModuleId(updatedCase.getModule().getId());
         } else if (updatedCase.getModuleId() != null) {
             existingCase.setModuleId(updatedCase.getModuleId());
         }
-        
+
         // Validate moduleId is present
         if (existingCase.getModuleId() == null) {
             return ResponseEntity.badRequest().build();
@@ -178,6 +185,41 @@ public class TestCaseController {
             @RequestParam(required = false) Long caseId,
             @RequestParam(defaultValue = "dev") String envKey) {
         return ResponseEntity.ok(testCaseService.executeAllCases(projectId, moduleId, caseId, envKey));
+    }
+
+    @GetMapping(value = "/execute/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter executeStream(
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long moduleId,
+            @RequestParam(required = false) Long caseId,
+            @RequestParam(defaultValue = "dev") String envKey) {
+        SseEmitter emitter = new SseEmitter(0L);
+
+        executorService.execute(() -> {
+            try {
+                testCaseService.executeAllCases(projectId, moduleId, caseId, envKey, event -> {
+                    try {
+                        emitter.send(event);
+                    } catch (IOException e) {
+                        // ignore
+                    }
+                });
+                emitter.complete();
+            } catch (Exception e) {
+                try {
+                    emitter.send(ScenarioExecutionEvent.builder()
+                            .type("error")
+                            .payload(e.getMessage())
+                            .timestamp(System.currentTimeMillis())
+                            .build());
+                    emitter.completeWithError(e);
+                } catch (IOException ex) {
+                    // ignore
+                }
+            }
+        });
+
+        return emitter;
     }
 
     /**

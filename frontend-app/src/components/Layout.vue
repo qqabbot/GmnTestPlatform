@@ -25,7 +25,7 @@
           </template>
           <el-menu-item index="/testing/plans">
             <el-icon><List /></el-icon>
-            <span>Test Plans</span>
+            <span>Test Scenarios</span>
           </el-menu-item>
           <el-menu-item index="/testing/schedules">
             <el-icon><Timer /></el-icon>

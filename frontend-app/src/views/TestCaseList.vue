@@ -52,8 +52,17 @@
             <el-switch v-model="row.isActive" />
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="150" fixed="right">
+        <el-table-column label="Actions" width="180" fixed="right">
           <template #default="{ row }">
+            <el-button
+              type="success"
+              size="small"
+              text
+              @click="handleExecute(row)"
+              title="Run with Real-time Logs"
+            >
+              <el-icon><VideoPlay /></el-icon>
+            </el-button>
             <el-button
               type="primary"
               size="small"
@@ -86,6 +95,13 @@
           @size-change="pageSize = $event; currentPage = 1"
         />
       </div>
+      <execution-console 
+        ref="executionConsole" 
+        :title="consoleTitle"
+        :stream-url="streamUrl"
+        fixed
+        offset-left="200px"
+      />
     </el-card>
 
     <!-- Edit Dialog -->
@@ -166,10 +182,11 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Search, Edit, Delete, VideoPlay } from '@element-plus/icons-vue'
 import { testCaseApi } from '../api/testCase'
 import { testModuleApi } from '../api/testModule'
 import { projectApi } from '../api/project'
+import ExecutionConsole from '@/components/scenario/ExecutionConsole.vue'
 
 const router = useRouter()
 
@@ -181,6 +198,11 @@ const selectedModuleId = ref(null)
 const cases = ref([])
 const modules = ref([])
 const projects = ref([])
+
+// Execution Console
+const executionConsole = ref(null)
+const consoleTitle = ref('')
+const streamUrl = ref('')
 
 // Pagination
 const currentPage = ref(1)
@@ -328,6 +350,19 @@ const deleteCase = async (id) => {
       ElMessage.error('Failed to delete test case')
     }
   }
+}
+
+const handleExecute = (row) => {
+  consoleTitle.value = `Executing: ${row.caseName}`
+  streamUrl.value = testCaseApi.getExecuteStreamUrl({
+    caseId: row.id,
+    envKey: 'dev' // Default to dev
+  })
+  
+  // Wait for refs to update if needed, but nextTick is safer or just call start
+  setTimeout(() => {
+    executionConsole.value.start()
+  }, 0)
 }
 
 const handleNewCase = () => {

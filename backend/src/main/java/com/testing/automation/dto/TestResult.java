@@ -13,9 +13,13 @@ public class TestResult {
     private String caseName;
     private String status; // PASS, FAIL, SKIP
     private String message; // Execution message
-    private int statusCode; // HTTP Status Code
+    private int responseCode; // Same as statusCode but used in some places
     private String responseBody; // HTTP Response Body
+    private java.util.Map<String, String> responseHeaders;
+    private String requestUrl;
+    private String method;
+    private String requestBody;
     private String detail; // 失败原因或详细信息
-    private long duration; // 执行时间 (ms)
+    private Long duration; // 执行时间 (ms) - Use Long wrapper to match ScenarioExecutionEngine check
     private java.util.List<com.testing.automation.model.TestExecutionLog> logs;
 }

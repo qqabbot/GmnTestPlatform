@@ -1,8 +1,10 @@
 package com.testing.automation.service;
 
 import com.testing.automation.dto.DryRunResponse;
+import com.testing.automation.dto.ScenarioExecutionEvent;
 import com.testing.automation.dto.TestResponse;
 import com.testing.automation.dto.TestResult;
+import java.util.function.Consumer;
 import com.testing.automation.Mapper.*;
 import com.testing.automation.model.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -261,6 +263,11 @@ public class TestCaseService {
 
     // Test Execution
     public List<TestResult> executeAllCases(Long projectId, Long moduleId, Long caseId, String envKey) {
+        return executeAllCases(projectId, moduleId, caseId, envKey, null);
+    }
+
+    public List<TestResult> executeAllCases(Long projectId, Long moduleId, Long caseId, String envKey,
+            Consumer<ScenarioExecutionEvent> eventListener) {
         List<TestCase> casesToExecute = new ArrayList<>();
 
         if (caseId != null) {
@@ -298,7 +305,7 @@ public class TestCaseService {
         Allure.suite("API Automation Test Suite - " + envKey);
 
         for (TestCase testCase : casesToExecute) {
-            TestResult result = executeSingleCaseLogic(testCase, runtimeVariables, executionHistory);
+            TestResult result = executeSingleCaseLogic(testCase, runtimeVariables, executionHistory, 0, eventListener);
             finalResults.add(result);
             executionHistory.put(testCase.getId(), result);
             saveExecutionRecord(testCase, result, envKey);
@@ -311,11 +318,12 @@ public class TestCaseService {
 
     public TestResult executeSingleCaseLogic(TestCase testCase, Map<String, Object> runtimeVariables,
             Map<Long, TestResult> executionHistory) {
-        return executeSingleCaseLogic(testCase, runtimeVariables, executionHistory, 0);
+        return executeSingleCaseLogic(testCase, runtimeVariables, executionHistory, 0, null);
     }
 
     public TestResult executeSingleCaseLogic(TestCase testCase, Map<String, Object> runtimeVariables,
-            Map<Long, TestResult> executionHistory, int currentDepth) {
+            Map<Long, TestResult> executionHistory, int currentDepth,
+            Consumer<ScenarioExecutionEvent> eventListener) {
         if (currentDepth > MAX_RECURSION_DEPTH) {
             return TestResult.builder()
                     .caseId(testCase.getId())
@@ -363,6 +371,15 @@ public class TestCaseService {
                 if (!Boolean.TRUE.equals(step.getEnabled()))
                     continue;
 
+                if (eventListener != null) {
+                    eventListener.accept(ScenarioExecutionEvent.builder()
+                            .type("step_start")
+                            .stepId(step.getId())
+                            .stepName(step.getStepName())
+                            .timestamp(System.currentTimeMillis())
+                            .build());
+                }
+
                 long stepStart = System.currentTimeMillis();
                 TestResponse stepResponse = null;
                 String stepUrl = null;
@@ -389,10 +406,10 @@ public class TestCaseService {
 
                         // Execute referenced case (recursive with depth check)
                         TestResult referencedResult = executeSingleCaseLogic(referencedCase, runtimeVariables,
-                                executionHistory, currentDepth + 1);
+                                executionHistory, currentDepth + 1, eventListener);
 
                         // Use the last response from referenced case
-                        Integer statusCode = referencedResult.getStatusCode();
+                        Integer statusCode = referencedResult.getResponseCode();
                         if ("FAIL".equals(referencedResult.getStatus())
                                 && referencedResult.getMessage().contains("Max recursion depth")) {
                             throw new RuntimeException(referencedResult.getMessage());
@@ -512,6 +529,17 @@ public class TestCaseService {
                         }
                     }
 
+                    if (eventListener != null) {
+                        eventListener.accept(ScenarioExecutionEvent.builder()
+                                .type("step_complete")
+                                .stepId(step.getId())
+                                .stepName(step.getStepName())
+                                .status(allStepsPassed ? "PASS" : "FAIL")
+                                .timestamp(System.currentTimeMillis())
+                                .variables(new HashMap<>(runtimeVariables))
+                                .build());
+                    }
+
                 } catch (Exception e) {
                     allStepsPassed = false;
                     finalMessage = "Step Failed: " + step.getStepName();
@@ -535,6 +563,17 @@ public class TestCaseService {
                     }
                     log.setCreatedAt(LocalDateTime.now());
                     logs.add(log);
+
+                    if (eventListener != null) {
+                        eventListener.accept(ScenarioExecutionEvent.builder()
+                                .type("step_complete")
+                                .stepId(step.getId())
+                                .stepName(step.getStepName())
+                                .status("FAIL")
+                                .timestamp(System.currentTimeMillis())
+                                .payload(e.getMessage())
+                                .build());
+                    }
                     break; // Stop on failure?
                 }
             }
@@ -545,6 +584,14 @@ public class TestCaseService {
         // be used
         if (testCase.getUrl() != null && !testCase.getUrl().trim().isEmpty()
                 && testCase.getMethod() != null && !testCase.getMethod().trim().isEmpty()) {
+            if (eventListener != null) {
+                eventListener.accept(ScenarioExecutionEvent.builder()
+                        .type("step_start")
+                        .stepId(testCase.getId())
+                        .stepName("Main Request: " + testCase.getCaseName())
+                        .timestamp(System.currentTimeMillis())
+                        .build());
+            }
             try {
                 // Resolve variables (including those extracted from steps)
                 String resolvedUrl = replaceVariables(testCase.getUrl(), runtimeVariables);
@@ -590,6 +637,17 @@ public class TestCaseService {
                 log.setCreatedAt(LocalDateTime.now());
                 logs.add(log);
 
+                if (eventListener != null) {
+                    eventListener.accept(ScenarioExecutionEvent.builder()
+                            .type("step_complete")
+                            .stepId(testCase.getId())
+                            .stepName("Main Request: " + testCase.getCaseName())
+                            .status("PASS")
+                            .timestamp(System.currentTimeMillis())
+                            .variables(new HashMap<>(runtimeVariables))
+                            .build());
+                }
+
             } catch (Exception e) {
                 // If main request fails, mark as failed but don't return early if steps passed
                 allStepsPassed = false;
@@ -612,6 +670,17 @@ public class TestCaseService {
                 }
                 log.setCreatedAt(LocalDateTime.now());
                 logs.add(log);
+
+                if (eventListener != null) {
+                    eventListener.accept(ScenarioExecutionEvent.builder()
+                            .type("step_complete")
+                            .stepId(testCase.getId())
+                            .stepName("Main Request: " + testCase.getCaseName())
+                            .status("FAIL")
+                            .timestamp(System.currentTimeMillis())
+                            .payload(e.getMessage())
+                            .build());
+                }
             }
         }
 
@@ -636,7 +705,7 @@ public class TestCaseService {
                 .status(status)
                 .message(finalMessage)
                 .detail(finalDetail)
-                .statusCode(lastResponse != null ? lastResponse.getStatusCode() : 0)
+                .responseCode(lastResponse != null ? lastResponse.getStatusCode() : 0)
                 .responseBody(lastResponse != null ? lastResponse.getBody() : null)
                 .duration(System.currentTimeMillis() - startTime)
                 .logs(logs)
@@ -665,9 +734,10 @@ public class TestCaseService {
         return true;
     }
 
-    private void executeScript(String script, Map<String, Object> variables) {
+    public Object executeScript(String script, Map<String, Object> variables) {
         try {
             ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
+            Object evalResult = null;
 
             // Provide helper functions
             engine.put("vars", variables);
@@ -682,17 +752,19 @@ public class TestCaseService {
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
                 engine.put(entry.getKey(), entry.getValue());
             }
-            engine.eval(script);
+            evalResult = engine.eval(script);
 
             // Update variables if modified in script
             variables.putAll((Map<String, Object>) engine.get("vars"));
+            return evalResult;
         } catch (Exception e) {
             System.err.println("Script execution failed: " + e.getMessage());
             e.printStackTrace();
+            return null;
         }
     }
 
-    private String replaceVariables(String text, Map<String, Object> variables) {
+    public String replaceVariables(String text, Map<String, Object> variables) {
         if (text == null)
             return null;
 
