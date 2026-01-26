@@ -117,25 +117,30 @@ public class TestCaseService {
                 // Save extractors
                 if (step.getExtractors() != null && !step.getExtractors().isEmpty()) {
                     for (com.testing.automation.model.Extractor extractor : step.getExtractors()) {
+                        String varName = extractor.getVariableName();
+                        String expression = extractor.getExpression();
+
+                        // Skip if variable name or expression is missing (invalid/empty extractor)
+                        if (varName == null || varName.trim().isEmpty() || expression == null
+                                || expression.trim().isEmpty()) {
+                            continue;
+                        }
+
                         extractor.setStepId(step.getId());
                         // Normalize variable name: remove ${} wrapper or $ prefix if present
-                        String varName = extractor.getVariableName();
-                        if (varName != null && !varName.isEmpty()) {
-                            varName = varName.trim();
-                            // Remove ${} wrapper: ${token} -> token
-                            if (varName.startsWith("${") && varName.endsWith("}")) {
-                                varName = varName.substring(2, varName.length() - 1);
-                            }
-                            // Remove $ prefix: $token -> token
-                            else if (varName.startsWith("$")) {
-                                varName = varName.substring(1);
-                            }
-                            extractor.setVariableName(varName);
+                        varName = varName.trim();
+                        // Remove ${} wrapper: ${token} -> token
+                        if (varName.startsWith("${") && varName.endsWith("}")) {
+                            varName = varName.substring(2, varName.length() - 1);
                         }
+                        // Remove $ prefix: $token -> token
+                        else if (varName.startsWith("$")) {
+                            varName = varName.substring(1);
+                        }
+                        extractor.setVariableName(varName);
+
                         // Set type based on source if not set
-                        // Frontend sends "source" field (json/header), map to type (JSONPATH/HEADER)
                         if (extractor.getType() == null || extractor.getType().isEmpty()) {
-                            // Try to infer from expression or default to JSONPATH
                             extractor.setType("JSONPATH");
                         }
                         extractor.setCreatedAt(LocalDateTime.now());
@@ -146,6 +151,13 @@ public class TestCaseService {
                 // Save assertions
                 if (step.getAssertions() != null && !step.getAssertions().isEmpty()) {
                     for (com.testing.automation.model.Assertion assertion : step.getAssertions()) {
+                        // Skip if expression and expected value are both missing
+                        if ((assertion.getExpression() == null || assertion.getExpression().trim().isEmpty()) &&
+                                (assertion.getExpectedValue() == null
+                                        || assertion.getExpectedValue().trim().isEmpty())) {
+                            continue;
+                        }
+
                         assertion.setStepId(step.getId());
                         assertion.setCreatedAt(LocalDateTime.now());
                         // Ensure type is not null (database constraint)
