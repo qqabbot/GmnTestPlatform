@@ -65,7 +65,8 @@
 
     <!-- Real-time Console -->
     <execution-console 
-      ref="execConsole" 
+      ref="execConsole"
+      v-model:visible="consoleVisible"
       :scenario-id="scenarioId" 
       @step-update="handleStepUpdate"
       @variables-update="handleVariablesUpdate"
@@ -100,6 +101,7 @@ const selectedStep = ref(null)
 const executionResults = ref([])
 const resultDialogVisible = ref(false)
 const execConsole = ref(null)
+const consoleVisible = ref(false)
 
 const rightActiveTab = ref('properties')
 const runtimeVariables = ref({})
@@ -165,6 +167,7 @@ const saveScenario = async () => {
 }
 
 const runScenario = async () => {
+    consoleVisible.value = true
     if (execConsole.value) {
         execConsole.value.start()
     }

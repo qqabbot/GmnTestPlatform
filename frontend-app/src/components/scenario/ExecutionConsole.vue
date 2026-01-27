@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" class="execution-console" :style="consoleStyle">
+  <div v-if="visibleLocal" class="execution-console" :style="consoleStyle">
     <div class="console-header">
       <div class="header-left">
         <span class="title">{{ title }}</span>
@@ -65,10 +65,14 @@ const props = defineProps({
   offsetLeft: {
     type: String,
     default: '0px'
+  },
+  visible: {
+    type: Boolean,
+    default: false
   }
 })
 
-const visible = ref(false)
+const visibleLocal = ref(false)
 const logs = ref([])
 const status = ref('')
 const isRunning = ref(false)
@@ -82,13 +86,14 @@ const consoleStyle = computed(() => ({
   left: props.offsetLeft || '0',
   bottom: '0',
   right: '0',
-  zIndex: props.fixed ? '2000' : '100'
+  zIndex: props.fixed ? '3000' : '2500'
 }))
 
-const emit = defineEmits(['step-update', 'variables-update'])
+const emit = defineEmits(['step-update', 'variables-update', 'update:visible'])
 
 const start = () => {
-  visible.value = true
+  visibleLocal.value = true
+  emit('update:visible', true)
   logs.value = []
   status.value = 'RUNNING'
   isRunning.value = true
@@ -176,11 +181,17 @@ const scrollToBottom = () => {
 }
 
 const close = () => {
-  visible.value = false
+  visibleLocal.value = false
+  emit('update:visible', false)
+  isRunning.value = false
   if (eventSource) {
     eventSource.close()
   }
 }
+
+watch(() => props.visible, (newVal) => {
+  visibleLocal.value = newVal
+}, { immediate: true })
 
 const formatTime = (ts) => {
   return new Date(ts).toLocaleTimeString()
@@ -247,7 +258,7 @@ defineExpose({ start })
   color: #d4d4d4;
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  z-index: 3000;
   border-top: 1px solid #333;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
