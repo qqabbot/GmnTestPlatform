@@ -467,6 +467,12 @@ public class TestCaseService {
                             resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                         }
 
+                        // Update result builder for scenario engine (Before execution to capture on
+                        // failure)
+                        resultBuilder.requestUrl(stepUrl)
+                                .method(step.getMethod())
+                                .requestBody(stepBody);
+
                         // Print to console for debugging
                         System.out.println("--------------------------------------------------");
                         System.out.println("[STEP REQUEST] " + step.getStepName());
@@ -478,11 +484,6 @@ public class TestCaseService {
 
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
                                 resolvedHeaders);
-
-                        // Update result builder for scenario engine
-                        resultBuilder.requestUrl(stepUrl)
-                                .method(step.getMethod())
-                                .requestBody(stepBody);
                     }
 
                     // Step Log
@@ -616,6 +617,7 @@ public class TestCaseService {
                                 .status("FAIL")
                                 .timestamp(System.currentTimeMillis())
                                 .payload(e.getMessage())
+                                .result(resultBuilder.build()) // Include partial result
                                 .build());
                     }
                     break; // Stop on failure?
@@ -648,6 +650,11 @@ public class TestCaseService {
                     resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                 }
 
+                // Track in result builder (Before execution to capture on failure)
+                resultBuilder.requestUrl(resolvedUrl)
+                        .method(testCase.getMethod())
+                        .requestBody(resolvedBody);
+
                 // Print to console for debugging
                 System.out.println("==================================================");
                 System.out.println("[MAIN REQUEST] " + testCase.getCaseName());
@@ -665,10 +672,6 @@ public class TestCaseService {
                 log.setStepName("Main Request");
                 log.setRequestUrl(resolvedUrl);
                 log.setRequestBody(resolvedBody);
-                // Also track in result for scenario engine
-                resultBuilder.requestUrl(resolvedUrl)
-                        .method(testCase.getMethod())
-                        .requestBody(resolvedBody);
                 // Set request headers (use resolved headers for display, but log original for
                 // reference)
                 log.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
@@ -737,6 +740,7 @@ public class TestCaseService {
                             .status("FAIL")
                             .timestamp(System.currentTimeMillis())
                             .payload(e.getMessage())
+                            .result(resultBuilder.build())
                             .build());
                 }
             }

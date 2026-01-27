@@ -22,64 +22,63 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 public class CaseStepInvoker implements StepInvoker {
-    
+
     @Autowired
     private TestCaseMapper testCaseMapper;
-    
+
     @Autowired
     private TestCaseService testCaseService;
-    
+
     @Autowired
     private VariableReferenceParser variableParser;
-    
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
+
     @Override
     public String getSupportedType() {
         return "CASE";
     }
-    
+
     @Override
     public void execute(TestScenarioStepDTO step,
-                       RunnerContext context,
-                       List<TestResult> results,
-                       Consumer<ScenarioExecutionEvent> eventListener) {
+            RunnerContext context,
+            List<TestResult> results,
+            Consumer<ScenarioExecutionEvent> eventListener) {
         if (step.getReferenceCaseId() == null) {
             log.warn("Case step {} has no reference case ID, skipping", step.getId());
             return;
         }
-        
+
         TestCase testCase = testCaseMapper.findByIdWithDetails(step.getReferenceCaseId());
         if (testCase == null) {
             log.error("Case not found: {}", step.getReferenceCaseId());
             return;
         }
-        
+
         try {
             String stepName = step.getName() != null ? step.getName() : testCase.getCaseName();
             log.info(">>> Start Executing Case Step: {}", stepName);
-            
+
             // Register step for step reference syntax
             context.registerStep(step.getId(), stepName);
-            
+
             // Apply Data Overrides from step configuration
             Map<String, Object> stepContext = new HashMap<>(context.getAllVariables());
             TestCase effectiveTestCase = applyDataOverrides(testCase, step, stepContext);
-            
+
             // Update context with step-specific variables
             for (Map.Entry<String, Object> entry : stepContext.entrySet()) {
                 if (!context.hasVariable(entry.getKey())) {
                     context.setVariable(entry.getKey(), entry.getValue());
                 }
             }
-            
+
             TestResult result = testCaseService.executeSingleCaseLogic(
-                effectiveTestCase, 
-                stepContext, 
-                context.getExecutionHistory()
-            );
+                    effectiveTestCase,
+                    stepContext,
+                    context.getExecutionHistory());
             result.setCaseName(stepName);
-            
+
             // Evaluate Visual Assertions
             if (step.getDataOverrides() != null) {
                 try {
@@ -91,15 +90,15 @@ public class CaseStepInvoker implements StepInvoker {
                     log.warn("Failed to evaluate visual assertions: {}", e.getMessage());
                 }
             }
-            
+
             log.info("<<< Finished Case Step. Status: {}", result.getStatus());
             if ("FAIL".equals(result.getStatus())) {
                 log.error("    Error: {}", result.getDetail());
             }
-            
+
             results.add(result);
-            context.recordStepResult(testCase.getId(), result);
-            
+            context.recordStepResult(step.getId(), result);
+
             // Notify step complete
             if (eventListener != null) {
                 eventListener.accept(ScenarioExecutionEvent.builder()
@@ -111,10 +110,10 @@ public class CaseStepInvoker implements StepInvoker {
                         .timestamp(System.currentTimeMillis())
                         .build());
             }
-            
+
             // Extract variables from response
             extractVariables(step, result, context);
-            
+
         } catch (Exception e) {
             log.error("Exception executing case step: {}", e.getMessage(), e);
             TestResult errorResult = TestResult.builder()
@@ -126,15 +125,15 @@ public class CaseStepInvoker implements StepInvoker {
             results.add(errorResult);
         }
     }
-    
+
     private TestCase applyDataOverrides(TestCase originalCase, TestScenarioStepDTO step, Map<String, Object> context) {
         if (step.getDataOverrides() == null) {
             return originalCase;
         }
-        
+
         try {
             JsonNode overrides = objectMapper.valueToTree(step.getDataOverrides());
-            
+
             // Create a copy of the test case
             TestCase effectiveCase = new TestCase();
             effectiveCase.setId(originalCase.getId());
@@ -149,7 +148,7 @@ public class CaseStepInvoker implements StepInvoker {
             effectiveCase.setAssertionScript(originalCase.getAssertionScript());
             effectiveCase.setIsActive(originalCase.getIsActive());
             effectiveCase.setSteps(originalCase.getSteps());
-            
+
             // Apply overrides
             if (overrides.has("url") && !overrides.get("url").isNull()) {
                 effectiveCase.setUrl(overrides.get("url").asText());
@@ -163,9 +162,9 @@ public class CaseStepInvoker implements StepInvoker {
                     if (originalCase.getHeaders() != null && !originalCase.getHeaders().trim().isEmpty()) {
                         try {
                             Map<String, String> originalHeaders = objectMapper.readValue(
-                                originalCase.getHeaders(), 
-                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {}
-                            );
+                                    originalCase.getHeaders(),
+                                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {
+                                    });
                             mergedHeaders.putAll(originalHeaders);
                         } catch (Exception e) {
                             log.warn("Failed to parse original headers: {}", e.getMessage());
@@ -185,35 +184,35 @@ public class CaseStepInvoker implements StepInvoker {
             if (overrides.has("params") && overrides.get("params").isObject()) {
                 JsonNode params = overrides.get("params");
                 params.fields().forEachRemaining(entry -> {
-                    String value = entry.getValue().isTextual() 
-                        ? entry.getValue().asText() 
-                        : entry.getValue().toString();
+                    String value = entry.getValue().isTextual()
+                            ? entry.getValue().asText()
+                            : entry.getValue().toString();
                     context.put(entry.getKey(), value);
                 });
             }
-            
+
             // Apply setupScript (Pre-request Script) override if present
             if (overrides.has("setupScript") && !overrides.get("setupScript").isNull()) {
                 effectiveCase.setSetupScript(overrides.get("setupScript").asText());
             }
-            
+
             // Apply assertionScript (Global Assertion) override if present
             if (overrides.has("assertionScript") && !overrides.get("assertionScript").isNull()) {
                 effectiveCase.setAssertionScript(overrides.get("assertionScript").asText());
             }
-            
+
             return effectiveCase;
         } catch (Exception e) {
             log.error("Failed to apply data overrides, using original case: {}", e.getMessage(), e);
             return originalCase;
         }
     }
-    
+
     private void extractVariables(TestScenarioStepDTO step, TestResult result, RunnerContext context) {
         if (step.getDataOverrides() == null) {
             return;
         }
-        
+
         try {
             JsonNode overrides = objectMapper.valueToTree(step.getDataOverrides());
             if (overrides.has("extract") && overrides.get("extract").isArray()) {
@@ -222,12 +221,13 @@ public class CaseStepInvoker implements StepInvoker {
                     String type = extractRule.has("type") ? extractRule.get("type").asText() : "JSON";
                     String expression = extractRule.has("expression") ? extractRule.get("expression").asText()
                             : (extractRule.has("jsonPath") ? extractRule.get("jsonPath").asText() : "");
-                    
+
                     try {
                         Object extractedValue = null;
                         if ("JSON".equalsIgnoreCase(type)) {
                             if (result.getResponseBody() != null) {
-                                extractedValue = com.jayway.jsonpath.JsonPath.read(result.getResponseBody(), expression);
+                                extractedValue = com.jayway.jsonpath.JsonPath.read(result.getResponseBody(),
+                                        expression);
                             }
                         } else if ("REGEX".equalsIgnoreCase(type)) {
                             if (result.getResponseBody() != null) {
@@ -243,7 +243,7 @@ public class CaseStepInvoker implements StepInvoker {
                                 extractedValue = result.getResponseHeaders().get(expression);
                             }
                         }
-                        
+
                         if (extractedValue != null) {
                             context.setVariable(varName, extractedValue);
                             log.info("  Extracted variable [{}]: {} = {}", type, varName, extractedValue);
@@ -257,12 +257,12 @@ public class CaseStepInvoker implements StepInvoker {
             log.warn("Failed to process variable extraction: {}", e.getMessage());
         }
     }
-    
+
     private void evaluateVisualAssertions(TestResult result, JsonNode assertions, RunnerContext context) {
         if (assertions == null || !assertions.isArray()) {
             return;
         }
-        
+
         StringBuilder failures = new StringBuilder();
         for (JsonNode rule : assertions) {
             try {
@@ -270,10 +270,11 @@ public class CaseStepInvoker implements StepInvoker {
                 String property = rule.has("property") ? rule.get("property").asText() : "";
                 String operator = rule.has("operator") ? rule.get("operator").asText() : "EQUALS";
                 String expectedStr = rule.has("expected") ? rule.get("expected").asText() : "";
-                
-                // Resolve variables in expected value (supports both ${var} and {{Step.field}} syntax)
+
+                // Resolve variables in expected value (supports both ${var} and {{Step.field}}
+                // syntax)
                 String resolvedExpected = variableParser.resolveVariables(expectedStr, context);
-                
+
                 Object actualValue = null;
                 if ("STATUS_CODE".equalsIgnoreCase(source)) {
                     actualValue = String.valueOf(result.getResponseCode());
@@ -290,7 +291,7 @@ public class CaseStepInvoker implements StepInvoker {
                         }
                     }
                 }
-                
+
                 boolean passed = compareValues(actualValue, resolvedExpected, operator);
                 if (!passed) {
                     failures.append(String.format("- [%s] %s %s %s (Actual: %s)\n",
@@ -300,7 +301,7 @@ public class CaseStepInvoker implements StepInvoker {
                 failures.append("- Error evaluating rule: ").append(e.getMessage()).append("\n");
             }
         }
-        
+
         if (failures.length() > 0) {
             result.setStatus("FAIL");
             String currentDetail = result.getDetail();
@@ -308,7 +309,7 @@ public class CaseStepInvoker implements StepInvoker {
                     + "Visual Assertion Failures:\n" + failures.toString());
         }
     }
-    
+
     private boolean compareValues(Object actual, String expected, String operator) {
         String actualStr = actual == null ? "null" : String.valueOf(actual);
         switch (operator.toUpperCase()) {
