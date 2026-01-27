@@ -193,10 +193,17 @@ public class TestCaseController {
             @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false) Long caseId,
             @RequestParam(defaultValue = "dev") String envKey) {
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(-1L);
 
         executorService.execute(() -> {
             try {
+                // Send an initial event to establish connection
+                emitter.send(ScenarioExecutionEvent.builder()
+                        .type("info")
+                        .payload("Connecting to execution engine...")
+                        .timestamp(System.currentTimeMillis())
+                        .build());
+
                 testCaseService.executeAllCases(projectId, moduleId, caseId, envKey, event -> {
                     try {
                         emitter.send(event);
