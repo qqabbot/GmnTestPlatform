@@ -149,6 +149,9 @@ public class CaseStepInvoker implements StepInvoker {
             effectiveCase.setIsActive(originalCase.getIsActive());
             effectiveCase.setSteps(originalCase.getSteps());
 
+            log.info("[Data Overrides] Original Case Body: {}", originalCase.getBody());
+            log.info("[Data Overrides] Full Overrides JSON: {}", overrides.toString());
+
             // Apply overrides
             if (overrides.has("url") && !overrides.get("url").isNull()) {
                 effectiveCase.setUrl(overrides.get("url").asText());
@@ -179,7 +182,8 @@ public class CaseStepInvoker implements StepInvoker {
                 }
             }
             if (overrides.has("body") && !overrides.get("body").isNull()) {
-                effectiveCase.setBody(overrides.get("body").asText());
+                JsonNode bodyNode = overrides.get("body");
+                effectiveCase.setBody(bodyNode.isTextual() ? bodyNode.asText() : bodyNode.toString());
             }
             if (overrides.has("params") && overrides.get("params").isObject()) {
                 JsonNode params = overrides.get("params");
