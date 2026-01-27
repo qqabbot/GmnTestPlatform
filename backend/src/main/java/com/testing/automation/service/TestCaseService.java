@@ -484,8 +484,25 @@ public class TestCaseService {
                         log.info("Body (Resolved): {}", stepBody);
                         log.info("------------------- STEP REQUEST END ---------------------");
 
+                        // Real-time console logs
+                        sendConsoleLog(eventListener, "request", "-> [" + step.getMethod() + "] " + stepUrl);
+                        if (stepBody != null && !stepBody.trim().isEmpty()) {
+                            sendConsoleLog(eventListener, "request", "Request Body: " + stepBody);
+                        }
+
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
                                 resolvedHeaders);
+
+                        if (stepResponse != null) {
+                            sendConsoleLog(eventListener, "response",
+                                    "<- Response Code: " + stepResponse.getStatusCode());
+                            if (stepResponse.getBody() != null && !stepResponse.getBody().trim().isEmpty()) {
+                                String bodyPreview = stepResponse.getBody().length() > 500
+                                        ? stepResponse.getBody().substring(0, 500) + "..."
+                                        : stepResponse.getBody();
+                                sendConsoleLog(eventListener, "response", "Response Body: " + bodyPreview);
+                            }
+                        }
                     }
 
                     // Step Log
@@ -666,8 +683,24 @@ public class TestCaseService {
                 log.info("Body (Resolved): {}", resolvedBody);
                 log.info("=================== MAIN REQUEST END =====================");
 
+                // Real-time console logs
+                sendConsoleLog(eventListener, "request", "-> [" + testCase.getMethod() + "] " + resolvedUrl);
+                if (resolvedBody != null && !resolvedBody.trim().isEmpty()) {
+                    sendConsoleLog(eventListener, "request", "Request Body: " + resolvedBody);
+                }
+
                 lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
                         resolvedHeaders);
+
+                if (lastResponse != null) {
+                    sendConsoleLog(eventListener, "response", "<- Response Code: " + lastResponse.getStatusCode());
+                    if (lastResponse.getBody() != null && !lastResponse.getBody().trim().isEmpty()) {
+                        String bodyPreview = lastResponse.getBody().length() > 500
+                                ? lastResponse.getBody().substring(0, 500) + "..."
+                                : lastResponse.getBody();
+                        sendConsoleLog(eventListener, "response", "Response Body: " + bodyPreview);
+                    }
+                }
 
                 // Log for main request
                 TestExecutionLog execLog = new TestExecutionLog();
@@ -1155,6 +1188,16 @@ public class TestCaseService {
             // e.printStackTrace(); // Optional: reduce log noise for expected assertion
             // failures
             return false;
+        }
+    }
+
+    private void sendConsoleLog(Consumer<ScenarioExecutionEvent> listener, String type, String message) {
+        if (listener != null) {
+            listener.accept(ScenarioExecutionEvent.builder()
+                    .type(type)
+                    .payload(message)
+                    .timestamp(System.currentTimeMillis())
+                    .build());
         }
     }
 
