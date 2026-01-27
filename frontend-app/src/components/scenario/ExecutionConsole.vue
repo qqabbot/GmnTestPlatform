@@ -117,6 +117,12 @@ const start = () => {
   }
   
   eventSource.onerror = (err) => {
+    // If we're already not running (finished), ignore errors/reconnect attempts
+    if (!isRunning.value) {
+      if (eventSource) eventSource.close()
+      return
+    }
+    
     const errorMsg = eventSource.readyState === EventSource.CLOSED 
       ? 'Connection closed (Check Backend logs)' 
       : 'Connection error (SSE failed)'
