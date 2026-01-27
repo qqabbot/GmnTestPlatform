@@ -117,9 +117,12 @@ const start = () => {
   }
   
   eventSource.onerror = (err) => {
-    // If we're already not running (finished), ignore errors/reconnect attempts
-    if (!isRunning.value) {
-      if (eventSource) eventSource.close()
+    // If we're already not running or source was nullified, ignore
+    if (!isRunning.value || !eventSource) {
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
       return
     }
     
@@ -130,6 +133,7 @@ const start = () => {
     isRunning.value = false
     status.value = 'ERROR'
     eventSource.close()
+    eventSource = null
   }
 }
 
@@ -162,13 +166,19 @@ const handleEvent = (event) => {
       addLog('info', `Scenario completed. Final status: ${event.status}`)
       status.value = event.status
       isRunning.value = false
-      eventSource.close()
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
       break
     case 'error':
       addLog('error', `Error: ${event.payload}`)
       isRunning.value = false
       status.value = 'FAIL'
-      eventSource.close()
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
       break
   }
 }
