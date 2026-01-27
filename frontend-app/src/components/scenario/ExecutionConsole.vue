@@ -137,6 +137,12 @@ const handleEvent = (event) => {
       emit('step-update', { stepId: event.stepId, status: event.status, result: event.result })
       emit('variables-update', event.variables)
       break
+    case 'request':
+      addLog('request', event.payload)
+      break
+    case 'response':
+      addLog('response', event.payload)
+      break
     case 'scenario_complete':
       addLog('info', `Scenario completed. Final status: ${event.status}`)
       status.value = event.status
@@ -287,6 +293,8 @@ defineExpose({ start })
 .success .log-tag { color: #4ec9b0; }
 .fail .log-tag { color: #f44747; }
 .error .log-tag { color: #f44747; }
+.request .log-tag { color: #9cdcfe; } /* Light Blue */
+.response .log-tag { color: #ce9178; } /* Light Orange/Brown */
 .running { color: #ce9178; }
 
 .log-message {
