@@ -17,6 +17,8 @@ import io.github.resilience4j.retry.RetryConfig;
 import io.qameta.allure.Allure;
 import io.qameta.allure.model.Status;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.expression.MapAccessor;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -47,7 +49,6 @@ public class TestCaseService {
     private final ScriptEngine groovyEngine = new ScriptEngineManager().getEngineByName("groovy");
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final org.springframework.expression.ExpressionParser spelParser = new org.springframework.expression.spel.standard.SpelExpressionParser();
-    private final org.springframework.expression.EvaluationContext spelContext = new org.springframework.expression.spel.support.StandardEvaluationContext();
 
     @Autowired
     public TestCaseService(TestCaseMapper caseMapper, TestModuleMapper moduleMapper, TestStepMapper stepMapper,
@@ -119,25 +120,30 @@ public class TestCaseService {
                 // Save extractors
                 if (step.getExtractors() != null && !step.getExtractors().isEmpty()) {
                     for (com.testing.automation.model.Extractor extractor : step.getExtractors()) {
+                        String varName = extractor.getVariableName();
+                        String expression = extractor.getExpression();
+
+                        // Skip if variable name or expression is missing (invalid/empty extractor)
+                        if (varName == null || varName.trim().isEmpty() || expression == null
+                                || expression.trim().isEmpty()) {
+                            continue;
+                        }
+
                         extractor.setStepId(step.getId());
                         // Normalize variable name: remove ${} wrapper or $ prefix if present
-                        String varName = extractor.getVariableName();
-                        if (varName != null && !varName.isEmpty()) {
-                            varName = varName.trim();
-                            // Remove ${} wrapper: ${token} -> token
-                            if (varName.startsWith("${") && varName.endsWith("}")) {
-                                varName = varName.substring(2, varName.length() - 1);
-                            }
-                            // Remove $ prefix: $token -> token
-                            else if (varName.startsWith("$")) {
-                                varName = varName.substring(1);
-                            }
-                            extractor.setVariableName(varName);
+                        varName = varName.trim();
+                        // Remove ${} wrapper: ${token} -> token
+                        if (varName.startsWith("${") && varName.endsWith("}")) {
+                            varName = varName.substring(2, varName.length() - 1);
                         }
+                        // Remove $ prefix: $token -> token
+                        else if (varName.startsWith("$")) {
+                            varName = varName.substring(1);
+                        }
+                        extractor.setVariableName(varName);
+
                         // Set type based on source if not set
-                        // Frontend sends "source" field (json/header), map to type (JSONPATH/HEADER)
                         if (extractor.getType() == null || extractor.getType().isEmpty()) {
-                            // Try to infer from expression or default to JSONPATH
                             extractor.setType("JSONPATH");
                         }
                         extractor.setCreatedAt(LocalDateTime.now());
@@ -148,6 +154,13 @@ public class TestCaseService {
                 // Save assertions
                 if (step.getAssertions() != null && !step.getAssertions().isEmpty()) {
                     for (com.testing.automation.model.Assertion assertion : step.getAssertions()) {
+                        // Skip if expression and expected value are both missing
+                        if ((assertion.getExpression() == null || assertion.getExpression().trim().isEmpty()) &&
+                                (assertion.getExpectedValue() == null
+                                        || assertion.getExpectedValue().trim().isEmpty())) {
+                            continue;
+                        }
+
                         assertion.setStepId(step.getId());
                         assertion.setCreatedAt(LocalDateTime.now());
                         // Ensure type is not null (database constraint)
@@ -774,46 +787,64 @@ public class TestCaseService {
         if (text == null)
             return null;
 
-        // Pattern to match ${...} expressions
-        // Supports both simple variables ${varName} and SpEL expressions
-        // ${T(System).currentTimeMillis()}
+        // Optimized pattern to reliably match ${...} even with special characters
         Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(text);
         StringBuffer sb = new StringBuffer();
 
         while (matcher.find()) {
-            String expression = matcher.group(1);
-            String replacement;
+            String expression = matcher.group(1).trim();
+            String replacement = null;
 
-            // Check if it's a SpEL expression (contains method calls, dots, parentheses)
-            if (expression.contains("(") || expression.contains(".") || expression.startsWith("T(")) {
-                try {
-                    // Evaluate SpEL expression
-                    Object result = spelParser.parseExpression(expression).getValue(spelContext);
-                    replacement = result != null ? Matcher.quoteReplacement(result.toString())
-                            : "\\${" + expression + "}";
-                } catch (Exception e) {
-                    // If SpEL evaluation fails, try as simple variable
+            try {
+                // Strategy 1: If it's a simple index access like idList[0]
+                if (expression.matches("^[a-zA-Z0-9_]+\\[\\d+\\]$")) {
+                    int openBracket = expression.indexOf("[");
+                    String varName = expression.substring(0, openBracket);
+                    int index = Integer.parseInt(expression.substring(openBracket + 1, expression.length() - 1));
+                    Object obj = variables.get(varName);
+
+                    if (obj instanceof List) {
+                        List<?> list = (List<?>) obj;
+                        if (index >= 0 && index < list.size()) {
+                            replacement = String.valueOf(list.get(index));
+                        }
+                    } else if (obj != null && obj.getClass().isArray()) {
+                        Object[] arr = (Object[]) obj;
+                        if (index >= 0 && index < arr.length) {
+                            replacement = String.valueOf(arr[index]);
+                        }
+                    }
+                }
+
+                // Strategy 2: If manual extraction failed, use SpEL
+                if (replacement == null
+                        && (expression.contains("[") || expression.contains(".") || expression.startsWith("T("))) {
+                    StandardEvaluationContext context = new StandardEvaluationContext(variables);
+                    context.addPropertyAccessor(new MapAccessor());
+                    context.setVariables(variables);
+                    Object result = spelParser.parseExpression(expression).getValue(context);
+                    if (result != null) {
+                        replacement = result.toString();
+                    }
+                }
+
+                // Strategy 3: Simple variable lookup
+                if (replacement == null) {
                     Object value = variables.get(expression);
-                    replacement = value != null ? Matcher.quoteReplacement(value.toString())
-                            : "\\${" + expression + "}";
+                    if (value != null) {
+                        replacement = value.toString();
+                    }
                 }
-            } else {
-                // Simple variable replacement
-                Object value = variables.get(expression);
-                if (value != null) {
-                    replacement = Matcher.quoteReplacement(value.toString());
-                } else {
-                    // Variable not found - keep the original expression to avoid breaking the
-                    // request
-                    // This allows users to see which variables are missing
-                    replacement = "\\${" + expression + "}";
-                    System.err.println("Warning: Variable '" + expression
-                            + "' not found in runtime variables. Available variables: " + variables.keySet());
-                }
+            } catch (Exception e) {
+                System.err.println("[DEBUG] Variable replacement failed for: [" + expression + "] - " + e.getMessage());
             }
 
-            matcher.appendReplacement(sb, replacement);
+            if (replacement != null) {
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+            } else {
+                matcher.appendReplacement(sb, Matcher.quoteReplacement("${" + matcher.group(1) + "}"));
+            }
         }
         matcher.appendTail(sb);
         return sb.toString();
