@@ -4,6 +4,7 @@ import com.testing.automation.dto.DryRunResponse;
 import com.testing.automation.dto.ScenarioExecutionEvent;
 import com.testing.automation.dto.TestResponse;
 import com.testing.automation.dto.TestResult;
+import lombok.extern.slf4j.Slf4j;
 import java.util.function.Consumer;
 import com.testing.automation.Mapper.*;
 import com.testing.automation.model.*;
@@ -31,6 +32,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Slf4j
 @Service
 public class TestCaseService {
 
@@ -473,14 +475,14 @@ public class TestCaseService {
                                 .method(step.getMethod())
                                 .requestBody(stepBody);
 
-                        // Print to console for debugging
-                        System.out.println("--------------------------------------------------");
-                        System.out.println("[STEP REQUEST] " + step.getStepName());
-                        System.out.println("Method: " + step.getMethod());
-                        System.out.println("URL:    " + stepUrl);
-                        System.out.println("Header: " + resolvedHeaders);
-                        System.out.println("Body:   " + stepBody);
-                        System.out.println("--------------------------------------------------");
+                        // Use Logger for debugging
+                        log.info("------------------- STEP REQUEST START -------------------");
+                        log.info("Step:   {}", step.getStepName());
+                        log.info("Method: {}", step.getMethod());
+                        log.info("URL:    {}", stepUrl);
+                        log.info("Body (Raw):      {}", step.getBody());
+                        log.info("Body (Resolved): {}", stepBody);
+                        log.info("------------------- STEP REQUEST END ---------------------");
 
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
                                 resolvedHeaders);
@@ -591,23 +593,23 @@ public class TestCaseService {
                     finalDetail = e.getMessage();
 
                     // Log failure with proper error details
-                    TestExecutionLog log = new TestExecutionLog();
-                    log.setStepName(step.getStepName());
-                    log.setRequestUrl(stepUrl != null ? stepUrl : step.getUrl());
-                    log.setRequestBody(stepBody != null ? stepBody : step.getBody());
+                    TestExecutionLog execLog = new TestExecutionLog();
+                    execLog.setStepName(step.getStepName());
+                    execLog.setRequestUrl(stepUrl != null ? stepUrl : step.getUrl());
+                    execLog.setRequestBody(stepBody != null ? stepBody : step.getBody());
                     // Set request headers even on error
-                    log.setRequestHeaders(step.getHeaders() != null ? step.getHeaders() : "{}");
-                    log.setResponseHeaders("{}");
-                    log.setResponseStatus(0); // 0 indicates network/execution error
-                    log.setResponseBody(e.getMessage()); // Clean error message without prefix
+                    execLog.setRequestHeaders(step.getHeaders() != null ? step.getHeaders() : "{}");
+                    execLog.setResponseHeaders("{}");
+                    execLog.setResponseStatus(0); // 0 indicates network/execution error
+                    execLog.setResponseBody(e.getMessage()); // Clean error message without prefix
                     // Save variable snapshot even on error
                     try {
-                        log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                        execLog.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
                     } catch (Exception ex) {
-                        log.setVariableSnapshot("{}");
+                        execLog.setVariableSnapshot("{}");
                     }
-                    log.setCreatedAt(LocalDateTime.now());
-                    logs.add(log);
+                    execLog.setCreatedAt(LocalDateTime.now());
+                    logs.add(execLog);
 
                     if (eventListener != null) {
                         eventListener.accept(ScenarioExecutionEvent.builder()
@@ -655,47 +657,47 @@ public class TestCaseService {
                         .method(testCase.getMethod())
                         .requestBody(resolvedBody);
 
-                // Print to console for debugging
-                System.out.println("==================================================");
-                System.out.println("[MAIN REQUEST] " + testCase.getCaseName());
-                System.out.println("Method: " + testCase.getMethod());
-                System.out.println("URL:    " + resolvedUrl);
-                System.out.println("Header: " + resolvedHeaders);
-                System.out.println("Body:   " + resolvedBody);
-                System.out.println("==================================================");
+                // Use Logger for debugging
+                log.info("=================== MAIN REQUEST START ===================");
+                log.info("Case:   {}", testCase.getCaseName());
+                log.info("Method: {}", testCase.getMethod());
+                log.info("URL:    {}", resolvedUrl);
+                log.info("Body (Raw):      {}", testCase.getBody());
+                log.info("Body (Resolved): {}", resolvedBody);
+                log.info("=================== MAIN REQUEST END =====================");
 
                 lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
                         resolvedHeaders);
 
                 // Log for main request
-                TestExecutionLog log = new TestExecutionLog();
-                log.setStepName("Main Request");
-                log.setRequestUrl(resolvedUrl);
-                log.setRequestBody(resolvedBody);
+                TestExecutionLog execLog = new TestExecutionLog();
+                execLog.setStepName("Main Request");
+                execLog.setRequestUrl(resolvedUrl);
+                execLog.setRequestBody(resolvedBody);
                 // Set request headers (use resolved headers for display, but log original for
                 // reference)
-                log.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
+                execLog.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
                         : (testCase.getHeaders() != null ? testCase.getHeaders() : "{}"));
                 // Set response headers
                 if (lastResponse.getHeaders() != null && !lastResponse.getHeaders().isEmpty()) {
                     try {
-                        log.setResponseHeaders(objectMapper.writeValueAsString(lastResponse.getHeaders()));
+                        execLog.setResponseHeaders(objectMapper.writeValueAsString(lastResponse.getHeaders()));
                     } catch (Exception e) {
-                        log.setResponseHeaders("{}");
+                        execLog.setResponseHeaders("{}");
                     }
                 } else {
-                    log.setResponseHeaders("{}");
+                    execLog.setResponseHeaders("{}");
                 }
-                log.setResponseStatus(lastResponse.getStatusCode());
-                log.setResponseBody(lastResponse.getBody());
+                execLog.setResponseStatus(lastResponse.getStatusCode());
+                execLog.setResponseBody(lastResponse.getBody());
                 // Save variable snapshot
                 try {
-                    log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                    execLog.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
                 } catch (Exception e) {
-                    log.setVariableSnapshot("{}");
+                    execLog.setVariableSnapshot("{}");
                 }
-                log.setCreatedAt(LocalDateTime.now());
-                logs.add(log);
+                execLog.setCreatedAt(LocalDateTime.now());
+                logs.add(execLog);
 
                 if (eventListener != null) {
                     eventListener.accept(ScenarioExecutionEvent.builder()
@@ -716,21 +718,21 @@ public class TestCaseService {
                 finalDetail = "HTTP Error: " + e.getMessage();
 
                 // Log failure
-                TestExecutionLog log = new TestExecutionLog();
-                log.setStepName("Main Request");
-                log.setRequestUrl(testCase.getUrl());
-                log.setRequestBody(testCase.getBody());
-                log.setRequestHeaders(testCase.getHeaders() != null ? testCase.getHeaders() : "{}");
-                log.setResponseHeaders("{}");
-                log.setResponseStatus(0);
-                log.setResponseBody(e.getMessage());
+                TestExecutionLog execLog = new TestExecutionLog();
+                execLog.setStepName("Main Request");
+                execLog.setRequestUrl(testCase.getUrl());
+                execLog.setRequestBody(testCase.getBody());
+                execLog.setRequestHeaders(testCase.getHeaders() != null ? testCase.getHeaders() : "{}");
+                execLog.setResponseHeaders("{}");
+                execLog.setResponseStatus(0);
+                execLog.setResponseBody(e.getMessage());
                 try {
-                    log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                    execLog.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
                 } catch (Exception ex) {
-                    log.setVariableSnapshot("{}");
+                    execLog.setVariableSnapshot("{}");
                 }
-                log.setCreatedAt(LocalDateTime.now());
-                logs.add(log);
+                execLog.setCreatedAt(LocalDateTime.now());
+                logs.add(execLog);
 
                 if (eventListener != null) {
                     eventListener.accept(ScenarioExecutionEvent.builder()
@@ -799,12 +801,12 @@ public class TestCaseService {
 
     public Object executeScript(String script, Map<String, Object> variables) {
         try {
-            ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
+            log.debug("Executing Groovy script: {}", script);
             Object evalResult = null;
 
             // Provide helper functions
-            engine.put("vars", variables);
-            engine.eval("def jsonPath(response, path) { " +
+            groovyEngine.put("vars", variables);
+            groovyEngine.eval("def jsonPath(response, path) { " +
                     "try { " +
                     "  return com.jayway.jsonpath.JsonPath.read(response.getBody() ?: '{}', path); " +
                     "} catch (Exception e) { " +
@@ -812,15 +814,22 @@ public class TestCaseService {
                     "}" +
                     "}");
 
+            // Inject variables directly for easier access
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                engine.put(entry.getKey(), entry.getValue());
+                groovyEngine.put(entry.getKey(), entry.getValue());
             }
-            evalResult = engine.eval(script);
+            evalResult = groovyEngine.eval(script);
 
             // Update variables if modified in script
-            variables.putAll((Map<String, Object>) engine.get("vars"));
+            if (groovyEngine.get("vars") instanceof Map) {
+                variables.putAll((Map<String, Object>) groovyEngine.get("vars"));
+            } else {
+                log.warn("Groovy script 'vars' object is not a Map after execution. Variables might not be updated.");
+            }
+            log.debug("Groovy script executed successfully. Result: {}", evalResult);
             return evalResult;
         } catch (Exception e) {
+            log.error("Script execution failed: {}", e.getMessage(), e);
             System.err.println("Script execution failed: " + e.getMessage());
             e.printStackTrace();
             return null;
