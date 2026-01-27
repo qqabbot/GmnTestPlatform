@@ -12,11 +12,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/scenarios")
 @CrossOrigin(origins = "*")
@@ -105,15 +108,22 @@ public class TestScenarioController {
 
     @GetMapping(value = "/{id}/execute/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter executeStream(@PathVariable Long id, @RequestParam String envKey) {
-        SseEmitter emitter = new SseEmitter(null); // No timeout for long scenarios? or set a reasonable one
+        SseEmitter emitter = new SseEmitter(-1L);
 
         executorService.execute(() -> {
             try {
+                // Send an initial event to establish connection
+                emitter.send(ScenarioExecutionEvent.builder()
+                        .type("info")
+                        .payload("Connecting to execution engine...")
+                        .timestamp(System.currentTimeMillis())
+                        .build());
+
                 executionEngine.executeScenario(id, envKey, event -> {
                     try {
                         emitter.send(event);
                     } catch (IOException e) {
-                        // Probably client disconnected
+                        log.warn("Failed to send SSE event: {}", e.getMessage());
                     }
                 });
                 emitter.complete();

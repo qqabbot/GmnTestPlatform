@@ -5,7 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9e33e7c9-1072-49e9-868d-87e3e73c7837" name="Changes" comment="test api">
-      <change beforePath="$PROJECT_DIR$/../frontend-app/src/components/scenario/ExecutionConsole.vue" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/components/scenario/ExecutionConsole.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -91,7 +91,7 @@
       <workItem from="1767945001353" duration="184000" />
       <workItem from="1767945195000" duration="1000" />
       <workItem from="1767945322097" duration="5697000" />
-      <workItem from="1769159855032" duration="15992000" />
+      <workItem from="1769159855032" duration="17264000" />
     </task>
     <task id="LOCAL-00001" summary="pre script 优化">
       <option name="closed" value="true" />
