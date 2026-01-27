@@ -76,7 +76,9 @@ public class CaseStepInvoker implements StepInvoker {
             TestResult result = testCaseService.executeSingleCaseLogic(
                     effectiveTestCase,
                     stepContext,
-                    context.getExecutionHistory());
+                    context.getExecutionHistory(),
+                    0, // initial depth
+                    eventListener);
             result.setCaseName(stepName);
 
             // Evaluate Visual Assertions
