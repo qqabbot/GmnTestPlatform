@@ -71,10 +71,13 @@
        </el-table>
     </el-dialog>
     
-    <!-- Execution History Dialog -->
-    <execution-history-dialog 
-        v-model="historyDialogVisible" 
-        :scenario-id="selectedScenarioId" 
+    <!-- Real-time Console -->
+    <execution-console 
+      ref="execConsole"
+      fixed="true"
+      v-model:visible="consoleVisible"
+      :scenario-id="selectedScenarioId"
+      @step-update="handleStepUpdate"
     />
 
   </div>
@@ -88,6 +91,7 @@ import { projectApi } from '../api/project'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, VideoPlay, Timer } from '@element-plus/icons-vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
+import ExecutionConsole from '../components/scenario/ExecutionConsole.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -103,6 +107,8 @@ const executionResults = ref([])
 
 const historyDialogVisible = ref(false)
 const selectedScenarioId = ref(null)
+const execConsole = ref(null)
+const consoleVisible = ref(false)
 
 onMounted(async () => {
     loadProjects()
@@ -170,15 +176,32 @@ const deleteScenario = async (row) => {
     }
 }
 
-const openRunDialog = async (row) => {
-    // Quick run with dev env for now
-     try {
-        ElMessage.info('Executing...')
-        const results = await testScenarioApi.execute(row.id, 'dev') 
-        executionResults.value = results
-        resultDialogVisible.value = true
-    } catch (e) {
-         ElMessage.error('Execution Failed')
+const openRunDialog = (row) => {
+    selectedScenarioId.value = row.id
+    consoleVisible.value = true
+    if (execConsole.value) {
+        execConsole.value.start()
+    }
+}
+
+const handleStepUpdate = (event) => {
+    if (event.type === 'reset') {
+        executionResults.value = []
+        return
+    }
+    
+    if (event.result) {
+        const existingIdx = executionResults.value.findIndex(r => r.caseId === event.result.caseId)
+        if (existingIdx >= 0) {
+            executionResults.value[existingIdx] = event.result
+        } else {
+            executionResults.value.push(event.result)
+        }
+    }
+    
+    // Auto show results dialog when complete
+    if (event.type === 'scenario_complete') {
+        // Optional: resultDialogVisible.value = true
     }
 }
 
