@@ -18,8 +18,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // 假设我们使用 Lombok 注解，实际项目中需引入 Lombok 依赖
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @RestController
 @RequestMapping("/api/cases")
+@CrossOrigin(origins = "*")
 public class TestCaseController {
 
     // 注入服务层 (需要实现)
@@ -213,6 +217,7 @@ public class TestCaseController {
                 });
                 emitter.complete();
             } catch (Exception e) {
+                log.error("SSE Execution Error: {}", e.getMessage(), e);
                 try {
                     emitter.send(ScenarioExecutionEvent.builder()
                             .type("error")

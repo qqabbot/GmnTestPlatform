@@ -128,6 +128,7 @@ public class TestScenarioController {
                 });
                 emitter.complete();
             } catch (Exception e) {
+                log.error("Scenario SSE Execution Error: {}", e.getMessage(), e);
                 try {
                     emitter.send(ScenarioExecutionEvent.builder()
                             .type("error")
