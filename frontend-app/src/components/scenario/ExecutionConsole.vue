@@ -108,6 +108,7 @@ const start = () => {
     eventSource.close()
   }
   
+  console.log('Starting EventSource with URL:', url)
   eventSource = new EventSource(url)
   
   eventSource.onmessage = (event) => {
@@ -116,7 +117,10 @@ const start = () => {
   }
   
   eventSource.onerror = (err) => {
-    addLog('error', 'Connection lost or error occurred')
+    const errorMsg = eventSource.readyState === EventSource.CLOSED 
+      ? 'Connection closed (Check Backend logs)' 
+      : 'Connection error (SSE failed)'
+    addLog('error', `${errorMsg} [State: ${eventSource.readyState}]`)
     isRunning.value = false
     status.value = 'ERROR'
     eventSource.close()

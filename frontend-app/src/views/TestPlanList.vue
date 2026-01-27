@@ -84,7 +84,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { testScenarioApi } from '../api/testScenario'
 import { projectApi } from '../api/project'
@@ -179,9 +179,11 @@ const deleteScenario = async (row) => {
 const openRunDialog = (row) => {
     selectedScenarioId.value = row.id
     consoleVisible.value = true
-    if (execConsole.value) {
-        execConsole.value.start()
-    }
+    nextTick(() => {
+        if (execConsole.value) {
+            execConsole.value.start()
+        }
+    })
 }
 
 const handleStepUpdate = (event) => {
