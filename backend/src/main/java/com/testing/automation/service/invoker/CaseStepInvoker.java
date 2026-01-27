@@ -114,6 +114,13 @@ public class CaseStepInvoker implements StepInvoker {
             // Extract variables from response
             extractVariables(step, result, context);
 
+            // Propagate changed variables back to the global context
+            // This ensures variables put in vars (e.g., via script) are available for next
+            // steps
+            for (Map.Entry<String, Object> entry : stepContext.entrySet()) {
+                context.setVariable(entry.getKey(), entry.getValue());
+            }
+
         } catch (Exception e) {
             log.error("Exception executing case step: {}", e.getMessage(), e);
             TestResult errorResult = TestResult.builder()
