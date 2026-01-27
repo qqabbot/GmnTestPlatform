@@ -148,6 +148,16 @@ const cloneTestCase = (original) => {
     }
   }
   
+  // Include Pre-request Script (setupScript) if it exists
+  if (original.setupScript) {
+    initialOverrides.setupScript = original.setupScript
+  }
+  
+  // Include Global Assertion (assertionScript) if it exists
+  if (original.assertionScript) {
+    initialOverrides.assertionScript = original.assertionScript
+  }
+  
   return {
     isNew: true,
     type: 'CASE',

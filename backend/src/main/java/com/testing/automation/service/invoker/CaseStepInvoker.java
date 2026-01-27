@@ -192,6 +192,16 @@ public class CaseStepInvoker implements StepInvoker {
                 });
             }
             
+            // Apply setupScript (Pre-request Script) override if present
+            if (overrides.has("setupScript") && !overrides.get("setupScript").isNull()) {
+                effectiveCase.setSetupScript(overrides.get("setupScript").asText());
+            }
+            
+            // Apply assertionScript (Global Assertion) override if present
+            if (overrides.has("assertionScript") && !overrides.get("assertionScript").isNull()) {
+                effectiveCase.setAssertionScript(overrides.get("assertionScript").asText());
+            }
+            
             return effectiveCase;
         } catch (Exception e) {
             log.error("Failed to apply data overrides, using original case: {}", e.getMessage(), e);
