@@ -15,7 +15,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.qameta.allure.Allure;
-import io.qameta.allure.model.Status;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.expression.MapAccessor;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
@@ -383,6 +382,8 @@ public class TestCaseService {
         String finalMessage = "Success";
         String finalDetail = "Success";
 
+        TestResult.TestResultBuilder resultBuilder = TestResult.builder();
+
         List<TestStep> effectiveSteps = testCase.getSteps();
         if (effectiveSteps != null && !effectiveSteps.isEmpty()) {
             // Execute Steps
@@ -399,7 +400,6 @@ public class TestCaseService {
                             .build());
                 }
 
-                long stepStart = System.currentTimeMillis();
                 TestResponse stepResponse = null;
                 String stepUrl = null;
                 String stepBody = null;
@@ -469,6 +469,11 @@ public class TestCaseService {
 
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
                                 resolvedHeaders);
+
+                        // Update result builder for scenario engine
+                        resultBuilder.requestUrl(stepUrl)
+                                .method(step.getMethod())
+                                .requestBody(stepBody);
                     }
 
                     // Step Log
@@ -556,6 +561,17 @@ public class TestCaseService {
                                 .status(allStepsPassed ? "PASS" : "FAIL")
                                 .timestamp(System.currentTimeMillis())
                                 .variables(new HashMap<>(runtimeVariables))
+                                .result(TestResult.builder() // Simplified result for step notification
+                                        .caseId(step.getId())
+                                        .caseName(step.getStepName())
+                                        .status(allStepsPassed ? "PASS" : "FAIL")
+                                        .requestUrl(stepUrl)
+                                        .method(step.getMethod())
+                                        .requestBody(stepBody)
+                                        .responseCode(stepResponse != null ? stepResponse.getStatusCode() : 0)
+                                        .responseBody(stepResponse != null ? stepResponse.getBody() : null)
+                                        .responseHeaders(stepResponse != null ? stepResponse.getHeaders() : null)
+                                        .build())
                                 .build());
                     }
 
@@ -631,6 +647,10 @@ public class TestCaseService {
                 log.setStepName("Main Request");
                 log.setRequestUrl(resolvedUrl);
                 log.setRequestBody(resolvedBody);
+                // Also track in result for scenario engine
+                resultBuilder.requestUrl(resolvedUrl)
+                        .method(testCase.getMethod())
+                        .requestBody(resolvedBody);
                 // Set request headers (use resolved headers for display, but log original for
                 // reference)
                 log.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
@@ -664,6 +684,7 @@ public class TestCaseService {
                             .status("PASS")
                             .timestamp(System.currentTimeMillis())
                             .variables(new HashMap<>(runtimeVariables))
+                            .result(resultBuilder.build()) // Use full result here
                             .build());
                 }
 
@@ -718,7 +739,7 @@ public class TestCaseService {
 
         String status = assertionPassed ? "PASS" : "FAIL";
 
-        return TestResult.builder()
+        return resultBuilder
                 .caseId(testCase.getId())
                 .caseName(testCase.getCaseName())
                 .status(status)
@@ -726,6 +747,7 @@ public class TestCaseService {
                 .detail(finalDetail)
                 .responseCode(lastResponse != null ? lastResponse.getStatusCode() : 0)
                 .responseBody(lastResponse != null ? lastResponse.getBody() : null)
+                .responseHeaders(lastResponse != null ? lastResponse.getHeaders() : null)
                 .duration(System.currentTimeMillis() - startTime)
                 .logs(logs)
                 .build();

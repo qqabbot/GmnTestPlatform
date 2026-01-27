@@ -40,8 +40,27 @@
               </template>
            </el-table-column>
            <el-table-column prop="duration" label="Time (ms)" width="100" />
-           <el-table-column prop="detail" label="Details" show-overflow-tooltip />
+           <el-table-column label="Actions" width="100">
+               <template #default="scope">
+                   <el-button type="primary" size="small" link @click="viewResultDetail(scope.row)">Details</el-button>
+               </template>
+           </el-table-column>
        </el-table>
+       
+       <!-- Inner Detail View -->
+       <el-dialog v-model="detailVisible" title="Step Detail" width="60%" append-to-body>
+          <div v-if="currentResult" class="result-detail">
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item label="URL">{{ currentResult.requestUrl }}</el-descriptions-item>
+              <el-descriptions-item label="Method">{{ currentResult.method }}</el-descriptions-item>
+              <el-descriptions-item label="Status">{{ currentResult.responseCode }}</el-descriptions-item>
+            </el-descriptions>
+            <el-divider content-position="left">Request Body</el-divider>
+            <pre class="code-box">{{ currentResult.requestBody }}</pre>
+            <el-divider content-position="left">Response Body</el-divider>
+            <pre class="code-box">{{ currentResult.responseBody }}</pre>
+          </div>
+       </el-dialog>
     </el-dialog>
 
     <!-- Real-time Console -->
@@ -85,6 +104,13 @@ const execConsole = ref(null)
 const rightActiveTab = ref('properties')
 const runtimeVariables = ref({})
 const historyDialogVisible = ref(false)
+const detailVisible = ref(false)
+const currentResult = ref(null)
+
+const viewResultDetail = (result) => {
+    currentResult.value = result
+    detailVisible.value = true
+}
 
 const selectedStepId = computed(() => {
     if (!selectedStep.value) return null
@@ -147,10 +173,21 @@ const runScenario = async () => {
 const handleStepUpdate = (event) => {
     if (event.type === 'reset') {
         resetStepStatuses(steps.value)
+        executionResults.value = []
         return
     }
     
     updateStepStatus(steps.value, event.stepId, event.status)
+    
+    if (event.result) {
+        // Collect results for the summary dialog
+        const existingIdx = executionResults.value.findIndex(r => r.caseId === event.result.caseId)
+        if (existingIdx >= 0) {
+            executionResults.value[existingIdx] = event.result
+        } else {
+            executionResults.value.push(event.result)
+        }
+    }
 }
 
 const resetStepStatuses = (nodes) => {
@@ -212,5 +249,17 @@ const updateStepStatus = (nodes, stepId, status) => {
 :deep(.el-tabs__content) {
     flex: 1;
     overflow: auto;
+}
+.code-box {
+    background: #f5f7fa;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 0;
+}
+.result-detail {
+    padding: 10px;
 }
 </style>

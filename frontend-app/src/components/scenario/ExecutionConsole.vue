@@ -134,7 +134,8 @@ const handleEvent = (event) => {
     case 'step_complete':
       const color = event.status === 'PASS' ? 'success' : 'fail'
       addLog(color, `<- Step completed: ${event.stepName} [${event.status}]`)
-      emit('step-update', { stepId: event.stepId, status: event.status })
+      emit('step-update', { stepId: event.stepId, status: event.status, result: event.result })
+      emit('variables-update', event.variables)
       break
     case 'scenario_complete':
       addLog('info', `Scenario completed. Final status: ${event.status}`)

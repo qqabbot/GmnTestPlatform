@@ -15,6 +15,7 @@ public class ScenarioExecutionEvent {
     private String stepName;
     private String status;
     private Object payload;
+    private TestResult result;
     private java.util.Map<String, Object> variables;
     private long timestamp;
 }

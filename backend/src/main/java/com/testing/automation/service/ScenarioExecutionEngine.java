@@ -44,7 +44,7 @@ public class ScenarioExecutionEngine {
 
     @Autowired
     private ScenarioStepExecutionLogMapper stepLogMapper;
-    
+
     @Autowired
     private StepInvokerRegistry invokerRegistry;
 
@@ -58,7 +58,7 @@ public class ScenarioExecutionEngine {
             Consumer<ScenarioExecutionEvent> eventListener) {
         return executeScenario(scenarioId, envKey, eventListener, null);
     }
-    
+
     /**
      * Execute scenario with optional parent context (for nested scenarios)
      */
@@ -66,12 +66,13 @@ public class ScenarioExecutionEngine {
             Consumer<ScenarioExecutionEvent> eventListener, RunnerContext parentContext) {
         // Create or use parent context
         RunnerContext runnerContext = parentContext != null ? parentContext : new RunnerContext();
-        
+
         // Check for circular reference
         if (runnerContext.isExecutingScenario(scenarioId)) {
-            throw new RuntimeException("Circular reference detected: scenario " + scenarioId + " is already being executed");
+            throw new RuntimeException(
+                    "Circular reference detected: scenario " + scenarioId + " is already being executed");
         }
-        
+
         TestScenario scenario = scenarioService.findById(scenarioId);
         if (scenario == null) {
             throw new RuntimeException("Scenario not found: " + scenarioId);
@@ -79,7 +80,7 @@ public class ScenarioExecutionEngine {
 
         // Add to executing set
         runnerContext.addExecutingScenario(scenarioId);
-        
+
         try {
             // Build Execution Context with scope stack (only if new context)
             if (parentContext == null) {
@@ -177,7 +178,7 @@ public class ScenarioExecutionEngine {
             List<TestResult> results,
             Long recordId,
             Consumer<ScenarioExecutionEvent> eventListener) {
-        
+
         // Check if step is disabled
         if (isStepDisabled(step)) {
             log.debug("Step {} is disabled, skipping", step.getId());
@@ -202,7 +203,7 @@ public class ScenarioExecutionEngine {
         if (invoker != null) {
             try {
                 invoker.execute(step, context, results, eventListener);
-                
+
                 // Save step log for CASE steps (other steps may not have TestResult)
                 TestResult stepResult = context.getStepResult(step.getId());
                 if (stepResult != null && recordId != null) {
@@ -223,7 +224,7 @@ public class ScenarioExecutionEngine {
             log.warn("No invoker found for step type: {}", type);
         }
     }
-    
+
     /**
      * Check if step is disabled
      * Steps can be disabled via dataOverrides.enabled flag
@@ -243,7 +244,6 @@ public class ScenarioExecutionEngine {
         return false;
     }
 
-
     private void saveStepLog(Long recordId, TestScenarioStepDTO step, TestResult result) {
         try {
             ScenarioStepExecutionLog log = new ScenarioStepExecutionLog();
@@ -255,8 +255,10 @@ public class ScenarioExecutionEngine {
             log.setRequestUrl(result.getRequestUrl());
             log.setRequestMethod(result.getMethod());
             log.setRequestBody(result.getRequestBody());
+            log.setRequestHeaders(result.getResponseHeaders() != null ? objectMapper.writeValueAsString(result.getResponseHeaders()) : null); // Fallback if needed, but better use a dedicated field if added
             log.setResponseCode(result.getResponseCode());
             log.setResponseBody(result.getResponseBody());
+            log.setResponseHeaders(result.getResponseHeaders() != null ? objectMapper.writeValueAsString(result.getResponseHeaders()) : null);
             log.setDurationMs(result.getDuration() != null ? result.getDuration().longValue() : null);
             log.setErrorMessage(result.getDetail());
             log.setExecutedAt(LocalDateTime.now());
