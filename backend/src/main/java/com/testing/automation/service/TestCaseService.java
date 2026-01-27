@@ -467,6 +467,15 @@ public class TestCaseService {
                             resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                         }
 
+                        // Print to console for debugging
+                        System.out.println("--------------------------------------------------");
+                        System.out.println("[STEP REQUEST] " + step.getStepName());
+                        System.out.println("Method: " + step.getMethod());
+                        System.out.println("URL:    " + stepUrl);
+                        System.out.println("Header: " + resolvedHeaders);
+                        System.out.println("Body:   " + stepBody);
+                        System.out.println("--------------------------------------------------");
+
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
                                 resolvedHeaders);
 
@@ -638,6 +647,15 @@ public class TestCaseService {
                 if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
                     resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                 }
+
+                // Print to console for debugging
+                System.out.println("==================================================");
+                System.out.println("[MAIN REQUEST] " + testCase.getCaseName());
+                System.out.println("Method: " + testCase.getMethod());
+                System.out.println("URL:    " + resolvedUrl);
+                System.out.println("Header: " + resolvedHeaders);
+                System.out.println("Body:   " + resolvedBody);
+                System.out.println("==================================================");
 
                 lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
                         resolvedHeaders);
