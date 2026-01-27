@@ -215,6 +215,10 @@ public class TestCaseController {
                         // ignore
                     }
                 });
+
+                // Small delay to ensure client processes the last message before connection
+                // close
+                Thread.sleep(200);
                 emitter.complete();
             } catch (Exception e) {
                 log.error("SSE Execution Error: {}", e.getMessage(), e);

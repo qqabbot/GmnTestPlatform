@@ -126,6 +126,8 @@ public class TestScenarioController {
                         log.warn("Failed to send SSE event: {}", e.getMessage());
                     }
                 });
+
+                Thread.sleep(200);
                 emitter.complete();
             } catch (Exception e) {
                 log.error("Scenario SSE Execution Error: {}", e.getMessage(), e);
