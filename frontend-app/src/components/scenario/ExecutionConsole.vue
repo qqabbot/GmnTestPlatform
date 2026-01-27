@@ -111,18 +111,22 @@ const start = () => {
   console.log('Starting EventSource with URL:', url)
   eventSource = new EventSource(url)
   
-  eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    handleEvent(data)
+  const onMessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      handleEvent(data)
+    } catch (e) {
+      console.error('Failed to parse SSE data', e)
+    }
   }
   
-  eventSource.onerror = (err) => {
-    // If we're already not running or source was nullified, ignore
-    if (!isRunning.value || !eventSource) {
-      if (eventSource) {
-        eventSource.close()
-        eventSource = null
-      }
+  const onError = (err) => {
+    // If we've already terminated the source, ignore
+    if (!eventSource) return
+    
+    // If not running, it means we probably just closed it ourselves
+    if (!isRunning.value) {
+      cleanUp()
       return
     }
     
@@ -130,11 +134,21 @@ const start = () => {
       ? 'Connection closed (Check Backend logs)' 
       : 'Connection error (SSE failed)'
     addLog('error', `${errorMsg} [State: ${eventSource.readyState}]`)
-    isRunning.value = false
-    status.value = 'ERROR'
-    eventSource.close()
-    eventSource = null
+    cleanUp()
   }
+
+  const cleanUp = () => {
+    if (eventSource) {
+        eventSource.removeEventListener('message', onMessage)
+        eventSource.removeEventListener('error', onError)
+        eventSource.close()
+        eventSource = null
+    }
+    isRunning.value = false
+  }
+
+  eventSource.addEventListener('message', onMessage)
+  eventSource.addEventListener('error', onError)
 }
 
 const handleEvent = (event) => {
@@ -144,7 +158,8 @@ const handleEvent = (event) => {
   
   switch (event.type) {
     case 'scenario_start':
-      addLog('info', `Started scenario: ${event.stepName}`)
+    case 'case_start':
+      addLog('info', `Started: ${event.stepName}`)
       break
     case 'step_start':
       addLog('info', `-> Executing step: ${event.stepName}`)
@@ -163,13 +178,20 @@ const handleEvent = (event) => {
       addLog('response', event.payload)
       break
     case 'scenario_complete':
-      addLog('info', `Scenario completed. Final status: ${event.status}`)
+    case 'case_complete':
+      const type = event.type === 'case_complete' ? 'Case' : 'Scenario'
+      addLog('info', `${type} completed. Final status: ${event.status}`)
       status.value = event.status
       isRunning.value = false
+      // No extra manual close here, it's handled by ensuring listeners are removed in cleanUp/onError
+      // or we can explicitly trigger a clean shutdown
       if (eventSource) {
         eventSource.close()
         eventSource = null
       }
+      break
+    case 'info':
+      addLog('info', event.payload)
       break
     case 'error':
       addLog('error', `Error: ${event.payload}`)

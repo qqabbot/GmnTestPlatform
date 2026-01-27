@@ -68,9 +68,30 @@
       ref="execConsole"
       v-model:visible="consoleVisible"
       :scenario-id="scenarioId" 
+      :env-key="selectedRunEnv"
       @step-update="handleStepUpdate"
       @variables-update="handleVariablesUpdate"
     />
+
+    <!-- Run Environment Dialog -->
+    <el-dialog v-model="showRunEnvDialog" title="Select Execution Environment" width="400px">
+      <el-form label-position="top">
+        <el-form-item label="Environment" required>
+          <el-select v-model="selectedRunEnv" placeholder="Select environment" style="width: 100%">
+            <el-option
+              v-for="env in environments"
+              :key="env.id"
+              :label="env.envName"
+              :value="env.envName"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRunEnvDialog = false">Cancel</el-button>
+        <el-button type="success" @click="confirmRun" :disabled="!selectedRunEnv">Run</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Execution History Dialog -->
     <execution-history-dialog 
@@ -91,6 +112,7 @@ import ExecutionConsole from '../components/scenario/ExecutionConsole.vue'
 import VariableContextViewer from '../components/scenario/VariableContextViewer.vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
 import { testScenarioApi } from '../api/testScenario'
+import { environmentApi } from '../api/environment'
 
 const route = useRoute()
 const scenarioId = route.params.id
@@ -102,6 +124,11 @@ const executionResults = ref([])
 const resultDialogVisible = ref(false)
 const execConsole = ref(null)
 const consoleVisible = ref(false)
+
+// Environment Selection
+const environments = ref([])
+const showRunEnvDialog = ref(false)
+const selectedRunEnv = ref('')
 
 const rightActiveTab = ref('properties')
 const runtimeVariables = ref({})
@@ -123,7 +150,20 @@ onMounted(async () => {
     if (scenarioId) {
         loadScenario(scenarioId)
     }
+    loadEnvironments()
 })
+
+const loadEnvironments = async () => {
+    try {
+        const data = await environmentApi.getAll()
+        environments.value = data
+        if (data.length > 0) {
+            selectedRunEnv.value = data[0].envName
+        }
+    } catch (e) {
+        console.error('Failed to load environments', e)
+    }
+}
 
 const loadScenario = async (id) => {
     try {
@@ -167,6 +207,11 @@ const saveScenario = async () => {
 }
 
 const runScenario = async () => {
+    showRunEnvDialog.value = true
+}
+
+const confirmRun = () => {
+    showRunEnvDialog.value = false
     consoleVisible.value = true
     if (execConsole.value) {
         execConsole.value.start()

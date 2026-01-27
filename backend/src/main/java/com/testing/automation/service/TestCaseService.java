@@ -324,11 +324,37 @@ public class TestCaseService {
 
         Allure.suite("API Automation Test Suite - " + envKey);
 
+        // Notify case start
+        if (eventListener != null) {
+            String caseDescriptor = caseId != null ? "Case " + caseId
+                    : (moduleId != null ? "Module " + moduleId
+                            : (projectId != null ? "Project " + projectId : "All Cases"));
+            eventListener.accept(ScenarioExecutionEvent.builder()
+                    .type("case_start")
+                    .stepName(caseDescriptor)
+                    .timestamp(System.currentTimeMillis())
+                    .variables(new HashMap<>(runtimeVariables))
+                    .build());
+        }
+
+        boolean anyFailed = false;
         for (TestCase testCase : casesToExecute) {
             TestResult result = executeSingleCaseLogic(testCase, runtimeVariables, executionHistory, 0, eventListener);
             finalResults.add(result);
             executionHistory.put(testCase.getId(), result);
             saveExecutionRecord(testCase, result, envKey);
+            if ("FAIL".equals(result.getStatus())) {
+                anyFailed = true;
+            }
+        }
+
+        // Notify case complete
+        if (eventListener != null) {
+            eventListener.accept(ScenarioExecutionEvent.builder()
+                    .type("case_complete")
+                    .status(anyFailed ? "FAIL" : "PASS")
+                    .timestamp(System.currentTimeMillis())
+                    .build());
         }
 
         return finalResults;
