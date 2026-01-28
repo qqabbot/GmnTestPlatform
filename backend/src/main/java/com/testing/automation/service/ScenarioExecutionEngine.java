@@ -246,24 +246,62 @@ public class ScenarioExecutionEngine {
 
     private void saveStepLog(Long recordId, TestScenarioStepDTO step, TestResult result) {
         try {
-            ScenarioStepExecutionLog log = new ScenarioStepExecutionLog();
-            log.setRecordId(recordId);
-            log.setStepId(step.getId());
-            log.setStepName(step.getName());
-            log.setStepType(step.getType());
-            log.setStatus(result.getStatus());
-            log.setRequestUrl(result.getRequestUrl());
-            log.setRequestMethod(result.getMethod());
-            log.setRequestBody(result.getRequestBody());
-            log.setRequestHeaders(result.getResponseHeaders() != null ? objectMapper.writeValueAsString(result.getResponseHeaders()) : null); // Fallback if needed, but better use a dedicated field if added
-            log.setResponseCode(result.getResponseCode());
-            log.setResponseBody(result.getResponseBody());
-            log.setResponseHeaders(result.getResponseHeaders() != null ? objectMapper.writeValueAsString(result.getResponseHeaders()) : null);
-            log.setDurationMs(result.getDuration() != null ? result.getDuration().longValue() : null);
-            log.setErrorMessage(result.getDetail());
-            log.setExecutedAt(LocalDateTime.now());
+            // If the result contains detailed logs (e.g., from a CASE step with sub-steps),
+            // save each sub-log individually.
+            if ("CASE".equals(step.getType()) && result.getLogs() != null && !result.getLogs().isEmpty()) {
+                for (com.testing.automation.model.TestExecutionLog subLog : result.getLogs()) {
+                    ScenarioStepExecutionLog log = new ScenarioStepExecutionLog();
+                    log.setRecordId(recordId);
+                    log.setStepId(step.getId());
+                    log.setStepName(subLog.getStepName()); // Already has [Ref: ...] prefix from TestCaseService
+                    log.setStepType("SUB_STEP");
+                    // Status should be FAIL if there's an error message that isn't "Success"
+                    String status = "PASS";
+                    if (subLog.getErrorMessage() != null && !"Success".equals(subLog.getErrorMessage())) {
+                        status = "FAIL";
+                    } else if (subLog.getResponseStatus() != null
+                            && (subLog.getResponseStatus() < 200 || subLog.getResponseStatus() >= 400)) {
+                        status = "FAIL";
+                    }
+                    log.setStatus(status);
+                    log.setRequestUrl(subLog.getRequestUrl());
+                    log.setRequestMethod(subLog.getRequestMethod());
+                    log.setRequestBody(toCompactJson(subLog.getRequestBody()));
+                    log.setRequestHeaders(toCompactJson(subLog.getRequestHeaders()));
+                    log.setResponseCode(subLog.getResponseStatus());
+                    log.setResponseBody(toCompactJson(subLog.getResponseBody()));
+                    log.setResponseHeaders(toCompactJson(subLog.getResponseHeaders()));
+                    log.setDurationMs(subLog.getDurationMs());
+                    log.setErrorMessage(subLog.getErrorMessage());
+                    log.setExecutedAt(subLog.getCreatedAt());
 
-            stepLogMapper.insert(log);
+                    stepLogMapper.insert(log);
+                }
+            } else {
+                // Standard single-entry log for non-CASE steps or CASE steps without sub-logs
+                ScenarioStepExecutionLog log = new ScenarioStepExecutionLog();
+                log.setRecordId(recordId);
+                log.setStepId(step.getId());
+                log.setStepName(step.getName());
+                log.setStepType(step.getType());
+                log.setStatus(result.getStatus());
+                log.setRequestUrl(result.getRequestUrl());
+                log.setRequestMethod(result.getMethod());
+                log.setRequestBody(toCompactJson(result.getRequestBody()));
+                log.setRequestHeaders(result.getRequestHeaders() != null
+                        ? toCompactJson(objectMapper.writeValueAsString(result.getRequestHeaders()))
+                        : null);
+                log.setResponseCode(result.getResponseCode());
+                log.setResponseBody(toCompactJson(result.getResponseBody()));
+                log.setResponseHeaders(result.getResponseHeaders() != null
+                        ? toCompactJson(objectMapper.writeValueAsString(result.getResponseHeaders()))
+                        : null);
+                log.setDurationMs(result.getDuration() != null ? result.getDuration().longValue() : null);
+                log.setErrorMessage(result.getDetail());
+                log.setExecutedAt(LocalDateTime.now());
+
+                stepLogMapper.insert(log);
+            }
         } catch (Exception e) {
             log.error("Failed to save step log: {}", e.getMessage(), e);
         }
@@ -348,6 +386,18 @@ public class ScenarioExecutionEngine {
                 }
             default:
                 return false;
+        }
+    }
+
+    private String toCompactJson(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return json;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(json);
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            return json;
         }
     }
 }

@@ -16,10 +16,12 @@ public interface TestExecutionLogMapper {
     @Select("SELECT * FROM test_execution_log WHERE id = #{id}")
     TestExecutionLog findById(Long id);
 
-    @Insert("INSERT INTO test_execution_log (record_id, step_name, request_url, request_headers, request_body, " +
-            "response_status, response_headers, response_body, variable_snapshot, created_at) " +
-            "VALUES (#{recordId}, #{stepName}, #{requestUrl}, #{requestHeaders}, #{requestBody}, " +
-            "#{responseStatus}, #{responseHeaders}, #{responseBody}, #{variableSnapshot}, #{createdAt})")
+    @Insert("INSERT INTO test_execution_log (record_id, step_name, request_url, request_method, request_headers, request_body, "
+            +
+            "response_status, response_headers, response_body, variable_snapshot, duration_ms, error_message, created_at) "
+            +
+            "VALUES (#{recordId}, #{stepName}, #{requestUrl}, #{requestMethod}, #{requestHeaders}, #{requestBody}, " +
+            "#{responseStatus}, #{responseHeaders}, #{responseBody}, #{variableSnapshot}, #{durationMs}, #{errorMessage}, #{createdAt})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(TestExecutionLog log);
 

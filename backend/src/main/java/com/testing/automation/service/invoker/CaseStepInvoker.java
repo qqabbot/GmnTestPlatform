@@ -77,7 +77,7 @@ public class CaseStepInvoker implements StepInvoker {
                     effectiveTestCase,
                     stepContext,
                     context.getExecutionHistory(),
-                    0, // initial depth
+                    1, // initial depth (nested in scenario step)
                     eventListener);
             result.setCaseName(stepName);
 

@@ -19,6 +19,7 @@ public class TestResult {
     private String requestUrl;
     private String method;
     private String requestBody;
+    private java.util.Map<String, String> requestHeaders;
     private String detail; // 失败原因或详细信息
     private Long duration; // 执行时间 (ms) - Use Long wrapper to match ScenarioExecutionEngine check
     private java.util.List<com.testing.automation.model.TestExecutionLog> logs;

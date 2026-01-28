@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.function.Consumer;
 import com.testing.automation.Mapper.*;
 import com.testing.automation.model.*;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -431,6 +432,7 @@ public class TestCaseService {
                 TestResponse stepResponse = null;
                 String stepUrl = null;
                 String stepBody = null;
+                long stepDuration = 0L;
 
                 try {
                     // Check if step references another test case
@@ -454,6 +456,25 @@ public class TestCaseService {
                         // Execute referenced case (recursive with depth check)
                         TestResult referencedResult = executeSingleCaseLogic(referencedCase, runtimeVariables,
                                 executionHistory, currentDepth + 1, eventListener);
+
+                        // Merge sub-logs into current logs
+                        if (referencedResult.getLogs() != null) {
+                            for (com.testing.automation.model.TestExecutionLog subLog : referencedResult.getLogs()) {
+                                // Add a prefix to help distinguish sub-steps in the UI
+                                String originalName = subLog.getStepName();
+                                if (referencedCase.getCaseName().equals(originalName)) {
+                                    subLog.setStepName("[Ref: " + originalName + "]");
+                                } else {
+                                    subLog.setStepName("[Ref: " + referencedCase.getCaseName() + "] " + originalName);
+                                }
+                                // Ensure logs are compact before merging (though they should be already)
+                                subLog.setRequestHeaders(toCompactJson(subLog.getRequestHeaders()));
+                                subLog.setRequestBody(toCompactJson(subLog.getRequestBody()));
+                                subLog.setResponseHeaders(toCompactJson(subLog.getResponseHeaders()));
+                                subLog.setResponseBody(toCompactJson(subLog.getResponseBody()));
+                                logs.add(subLog);
+                            }
+                        }
 
                         // Use the last response from referenced case
                         Integer statusCode = referencedResult.getResponseCode();
@@ -516,8 +537,10 @@ public class TestCaseService {
                             sendConsoleLog(eventListener, "request", "Request Body: " + stepBody);
                         }
 
+                        long stepStartTime = System.currentTimeMillis();
                         stepResponse = executeHttpRequest(step.getMethod(), stepUrl, stepBody,
                                 resolvedHeaders);
+                        stepDuration = System.currentTimeMillis() - stepStartTime;
 
                         if (stepResponse != null) {
                             sendConsoleLog(eventListener, "response",
@@ -531,37 +554,43 @@ public class TestCaseService {
                         }
                     }
 
-                    // Step Log
-                    TestExecutionLog log = new TestExecutionLog();
-                    log.setStepName(step.getStepName());
-                    log.setRequestUrl(stepUrl);
-                    log.setRequestBody(stepBody);
-                    // Set request headers (use resolved headers for display)
-                    String stepResolvedHeaders = step.getHeaders();
-                    if (stepResolvedHeaders != null && !stepResolvedHeaders.trim().isEmpty()) {
-                        stepResolvedHeaders = replaceVariables(stepResolvedHeaders, runtimeVariables);
-                    }
-                    log.setRequestHeaders(stepResolvedHeaders != null ? stepResolvedHeaders : "{}");
-                    // Set response headers
-                    if (stepResponse.getHeaders() != null && !stepResponse.getHeaders().isEmpty()) {
-                        try {
-                            log.setResponseHeaders(objectMapper.writeValueAsString(stepResponse.getHeaders()));
-                        } catch (Exception e) {
+                    // Step Log - Only create a summary log for normal steps.
+                    // For referenced cases, we already added detailed sub-logs above.
+                    if (step.getReferenceCaseId() == null) {
+                        TestExecutionLog log = new TestExecutionLog();
+                        log.setStepName(step.getStepName());
+                        log.setRequestUrl(stepUrl);
+                        log.setRequestMethod(step.getMethod());
+                        log.setRequestBody(toCompactJson(stepBody));
+                        // Set request headers (use resolved headers for display)
+                        String stepResolvedHeaders = step.getHeaders();
+                        if (stepResolvedHeaders != null && !stepResolvedHeaders.trim().isEmpty()) {
+                            stepResolvedHeaders = replaceVariables(stepResolvedHeaders, runtimeVariables);
+                        }
+                        log.setRequestHeaders(toCompactJson(stepResolvedHeaders != null ? stepResolvedHeaders : "{}"));
+                        // Set response headers
+                        if (stepResponse.getHeaders() != null && !stepResponse.getHeaders().isEmpty()) {
+                            try {
+                                log.setResponseHeaders(objectMapper.writeValueAsString(stepResponse.getHeaders()));
+                            } catch (Exception e) {
+                                log.setResponseHeaders("{}");
+                            }
+                        } else {
                             log.setResponseHeaders("{}");
                         }
-                    } else {
-                        log.setResponseHeaders("{}");
+                        log.setResponseStatus(stepResponse.getStatusCode());
+                        log.setResponseBody(toCompactJson(stepResponse.getBody()));
+                        log.setDurationMs(stepDuration);
+                        log.setErrorMessage("Success");
+                        // Save variable snapshot for this step
+                        try {
+                            log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
+                        } catch (Exception e) {
+                            log.setVariableSnapshot("{}");
+                        }
+                        log.setCreatedAt(LocalDateTime.now());
+                        logs.add(log);
                     }
-                    log.setResponseStatus(stepResponse.getStatusCode());
-                    log.setResponseBody(stepResponse.getBody());
-                    // Save variable snapshot for this step
-                    try {
-                        log.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
-                    } catch (Exception e) {
-                        log.setVariableSnapshot("{}");
-                    }
-                    log.setCreatedAt(LocalDateTime.now());
-                    logs.add(log);
                     lastResponse = stepResponse;
 
                     // Execute Extractors to extract variables from response
@@ -604,6 +633,11 @@ public class TestCaseService {
                             allStepsPassed = false;
                             finalMessage = "Step Assertion Failed: " + step.getStepName();
                             finalDetail = "Step assertion failed. Script: " + step.getAssertionScript();
+                            // Update the log entry with error message
+                            if (!logs.isEmpty()) {
+                                TestExecutionLog lastLog = logs.get(logs.size() - 1);
+                                lastLog.setErrorMessage(finalDetail);
+                            }
                             break; // Stop execution on step assertion failure
                         }
                     }
@@ -639,9 +673,11 @@ public class TestCaseService {
                     TestExecutionLog execLog = new TestExecutionLog();
                     execLog.setStepName(step.getStepName());
                     execLog.setRequestUrl(stepUrl != null ? stepUrl : step.getUrl());
-                    execLog.setRequestBody(stepBody != null ? stepBody : step.getBody());
+                    execLog.setRequestMethod(step.getMethod());
+                    execLog.setRequestBody(toCompactJson(stepBody != null ? stepBody : step.getBody()));
                     // Set request headers even on error
-                    execLog.setRequestHeaders(step.getHeaders() != null ? step.getHeaders() : "{}");
+                    execLog.setRequestHeaders(toCompactJson(step.getHeaders() != null ? step.getHeaders() : "{}"));
+                    execLog.setErrorMessage(e.getMessage());
                     execLog.setResponseHeaders("{}");
                     execLog.setResponseStatus(0); // 0 indicates network/execution error
                     execLog.setResponseBody(e.getMessage()); // Clean error message without prefix
@@ -673,13 +709,14 @@ public class TestCaseService {
         // Execute Main Request if URL and method are provided
         // This executes after steps (if any) so that variables extracted from steps can
         // be used
+        String resolvedHeaders = null;
         if (testCase.getUrl() != null && !testCase.getUrl().trim().isEmpty()
                 && testCase.getMethod() != null && !testCase.getMethod().trim().isEmpty()) {
-            if (eventListener != null) {
+            if (eventListener != null && currentDepth == 0) {
                 eventListener.accept(ScenarioExecutionEvent.builder()
                         .type("step_start")
                         .stepId(testCase.getId())
-                        .stepName("Main Request: " + testCase.getCaseName())
+                        .stepName(testCase.getCaseName())
                         .timestamp(System.currentTimeMillis())
                         .build());
             }
@@ -690,7 +727,7 @@ public class TestCaseService {
                         ? replaceVariables(testCase.getBody(), runtimeVariables)
                         : null;
                 // Also replace variables in headers (including variables from steps)
-                String resolvedHeaders = testCase.getHeaders();
+                resolvedHeaders = testCase.getHeaders();
                 if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
                     resolvedHeaders = replaceVariables(resolvedHeaders, runtimeVariables);
                 }
@@ -715,8 +752,10 @@ public class TestCaseService {
                     sendConsoleLog(eventListener, "request", "Request Body: " + resolvedBody);
                 }
 
+                long mainStartTime = System.currentTimeMillis();
                 lastResponse = executeHttpRequest(testCase.getMethod(), resolvedUrl, resolvedBody,
                         resolvedHeaders);
+                long mainDuration = System.currentTimeMillis() - mainStartTime;
 
                 if (lastResponse != null) {
                     sendConsoleLog(eventListener, "response", "<- Response Code: " + lastResponse.getStatusCode());
@@ -730,13 +769,14 @@ public class TestCaseService {
 
                 // Log for main request
                 TestExecutionLog execLog = new TestExecutionLog();
-                execLog.setStepName("Main Request");
+                execLog.setStepName(testCase.getCaseName());
                 execLog.setRequestUrl(resolvedUrl);
-                execLog.setRequestBody(resolvedBody);
+                execLog.setRequestMethod(testCase.getMethod());
+                execLog.setRequestBody(toCompactJson(resolvedBody));
                 // Set request headers (use resolved headers for display, but log original for
                 // reference)
-                execLog.setRequestHeaders(resolvedHeaders != null ? resolvedHeaders
-                        : (testCase.getHeaders() != null ? testCase.getHeaders() : "{}"));
+                execLog.setRequestHeaders(toCompactJson(resolvedHeaders != null ? resolvedHeaders
+                        : (testCase.getHeaders() != null ? testCase.getHeaders() : "{}")));
                 // Set response headers
                 if (lastResponse.getHeaders() != null && !lastResponse.getHeaders().isEmpty()) {
                     try {
@@ -748,7 +788,9 @@ public class TestCaseService {
                     execLog.setResponseHeaders("{}");
                 }
                 execLog.setResponseStatus(lastResponse.getStatusCode());
-                execLog.setResponseBody(lastResponse.getBody());
+                execLog.setResponseBody(toCompactJson(lastResponse.getBody()));
+                execLog.setDurationMs(mainDuration);
+                execLog.setErrorMessage("Success");
                 // Save variable snapshot
                 try {
                     execLog.setVariableSnapshot(objectMapper.writeValueAsString(runtimeVariables));
@@ -758,11 +800,11 @@ public class TestCaseService {
                 execLog.setCreatedAt(LocalDateTime.now());
                 logs.add(execLog);
 
-                if (eventListener != null) {
+                if (eventListener != null && currentDepth == 0) {
                     eventListener.accept(ScenarioExecutionEvent.builder()
                             .type("step_complete")
                             .stepId(testCase.getId())
-                            .stepName("Main Request: " + testCase.getCaseName())
+                            .stepName(testCase.getCaseName())
                             .status("PASS")
                             .timestamp(System.currentTimeMillis())
                             .variables(new HashMap<>(runtimeVariables))
@@ -773,15 +815,17 @@ public class TestCaseService {
             } catch (Exception e) {
                 // If main request fails, mark as failed but don't return early if steps passed
                 allStepsPassed = false;
-                finalMessage = "Main Request Failed";
+                finalMessage = testCase.getCaseName() + " Failed";
                 finalDetail = "HTTP Error: " + e.getMessage();
 
                 // Log failure
                 TestExecutionLog execLog = new TestExecutionLog();
-                execLog.setStepName("Main Request");
+                execLog.setStepName(testCase.getCaseName());
                 execLog.setRequestUrl(testCase.getUrl());
-                execLog.setRequestBody(testCase.getBody());
-                execLog.setRequestHeaders(testCase.getHeaders() != null ? testCase.getHeaders() : "{}");
+                execLog.setRequestMethod(testCase.getMethod());
+                execLog.setRequestBody(toCompactJson(testCase.getBody()));
+                execLog.setRequestHeaders(toCompactJson(testCase.getHeaders() != null ? testCase.getHeaders() : "{}"));
+                execLog.setErrorMessage(e.getMessage());
                 execLog.setResponseHeaders("{}");
                 execLog.setResponseStatus(0);
                 execLog.setResponseBody(e.getMessage());
@@ -793,11 +837,11 @@ public class TestCaseService {
                 execLog.setCreatedAt(LocalDateTime.now());
                 logs.add(execLog);
 
-                if (eventListener != null) {
+                if (eventListener != null && currentDepth == 0) {
                     eventListener.accept(ScenarioExecutionEvent.builder()
                             .type("step_complete")
                             .stepId(testCase.getId())
-                            .stepName("Main Request: " + testCase.getCaseName())
+                            .stepName(testCase.getCaseName())
                             .status("FAIL")
                             .timestamp(System.currentTimeMillis())
                             .payload(e.getMessage())
@@ -815,12 +859,29 @@ public class TestCaseService {
             if (!assertionPassed) {
                 finalMessage = "Assertion failed";
                 finalDetail = "Assertion failed. Script: " + testCase.getEffectiveAssertionScript();
+                // Update the log entry with error message
+                if (!logs.isEmpty()) {
+                    TestExecutionLog lastLog = logs.get(logs.size() - 1);
+                    if (testCase.getCaseName().equals(lastLog.getStepName())) {
+                        lastLog.setErrorMessage(finalDetail);
+                    }
+                }
             }
         } else if (!allStepsPassed) {
             assertionPassed = false;
         }
 
         String status = assertionPassed ? "PASS" : "FAIL";
+
+        Map<String, String> requestHeadersMap = new HashMap<>();
+        if (resolvedHeaders != null && !resolvedHeaders.trim().isEmpty()) {
+            try {
+                requestHeadersMap = objectMapper.readValue(resolvedHeaders,
+                        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+            } catch (Exception e) {
+                // Ignore parsing errors for result builder
+            }
+        }
 
         return resultBuilder
                 .caseId(testCase.getId())
@@ -831,6 +892,7 @@ public class TestCaseService {
                 .responseCode(lastResponse != null ? lastResponse.getStatusCode() : 0)
                 .responseBody(lastResponse != null ? lastResponse.getBody() : null)
                 .responseHeaders(lastResponse != null ? lastResponse.getHeaders() : null)
+                .requestHeaders(requestHeadersMap)
                 .duration(System.currentTimeMillis() - startTime)
                 .logs(logs)
                 .build();
@@ -1244,6 +1306,18 @@ public class TestCaseService {
                 log.setRecordId(record.getId());
                 executionLogMapper.insert(log);
             }
+        }
+    }
+
+    private String toCompactJson(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return json;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(json);
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            return json; // Not valid JSON, keep as is
         }
     }
 }
