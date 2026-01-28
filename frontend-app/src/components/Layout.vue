@@ -9,6 +9,7 @@
         background-color="#304156"
         text-color="#fff"
         active-text-color="#409EFF"
+        style="border: none"
         @select="handleMenuSelect"
       >
         <!-- Dashboard -->
@@ -110,11 +111,7 @@
           </template>
           <el-menu-item index="/config/environments">
             <el-icon><Connection /></el-icon>
-            <span>Environments</span>
-          </el-menu-item>
-          <el-menu-item index="/config/variables">
-            <el-icon><Coin /></el-icon>
-            <span>Variables</span>
+            <span>Envionment</span>
           </el-menu-item>
           <el-menu-item index="/config/step-templates">
             <el-icon><Collection /></el-icon>
@@ -186,8 +183,7 @@ const pageTitle = computed(() => {
     '/ui-testing/cases': 'UI Testing - Test Cases',
     '/ui-testing/cases/new': 'UI Testing - New Case',
     '/ui-testing/reports': 'UI Testing - Reports',
-    '/config/environments': 'Configuration - Environments',
-    '/config/variables': 'Configuration - Variables'
+    '/config/environments': '环境变量',
   }
   
   if (route.path.startsWith('/ui-testing/cases/') && route.path.endsWith('/edit')) {

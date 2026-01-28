@@ -1,5 +1,17 @@
 <template>
-  <div class="scenario-editor-layout">
+  <div class="scenario-editor-wrapper">
+    <!-- Header -->
+    <div class="editor-header">
+      <div class="header-left">
+        <el-button @click="handleBack" link>
+          <el-icon><ArrowLeft /></el-icon> Back
+        </el-button>
+        <el-divider direction="vertical" />
+        <span class="page-title">Scenario Editor</span>
+      </div>
+    </div>
+
+    <div class="scenario-editor-layout">
      <!-- Left: Library -->
      <div class="pane left-pane">
         <resource-library :project-id="currentScenario.projectId" />
@@ -99,12 +111,14 @@
       :scenario-id="scenarioId" 
     />
   </div>
+</div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import ResourceLibrary from '../components/scenario/ResourceLibrary.vue'
 import ScenarioCanvas from '../components/scenario/ScenarioCanvas.vue'
 import StepProperties from '../components/scenario/StepProperties.vue'
@@ -115,7 +129,12 @@ import { testScenarioApi } from '../api/testScenario'
 import { environmentApi } from '../api/environment'
 
 const route = useRoute()
+const router = useRouter()
 const scenarioId = route.params.id
+
+const handleBack = () => {
+  router.push('/testing/plans')
+}
 
 const currentScenario = ref({})
 const steps = ref([])
@@ -265,9 +284,37 @@ const updateStepStatus = (nodes, stepId, status) => {
 </script>
 
 <style scoped>
+.scenario-editor-wrapper {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-header {
+  height: 50px;
+  padding: 0 20px;
+  background-color: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
 .scenario-editor-layout {
     display: flex;
-    height: calc(100vh - 84px); /* Adjust based on navbar height */
+    flex: 1;
     overflow: hidden;
     position: relative;
 }

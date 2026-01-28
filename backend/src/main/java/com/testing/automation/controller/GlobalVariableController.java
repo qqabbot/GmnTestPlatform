@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/variables")
@@ -35,6 +36,12 @@ public class GlobalVariableController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVariable(@PathVariable Long id) {
         globalVariableService.deleteVariable(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/environment/{envId}/sync")
+    public ResponseEntity<Void> syncVariables(@PathVariable Long envId, @RequestBody Map<String, String> variables) {
+        globalVariableService.syncVariables(envId, variables);
         return ResponseEntity.ok().build();
     }
 }
