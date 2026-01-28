@@ -102,6 +102,12 @@
       </template>
     </el-dialog>
 
+    <!-- Execution History Dialog -->
+    <execution-history-dialog 
+      v-model="historyDialogVisible" 
+      :scenario-id="selectedScenarioId" 
+    />
+
   </div>
 </template>
 
