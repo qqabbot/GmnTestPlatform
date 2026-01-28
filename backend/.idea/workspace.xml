@@ -6,13 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="9e33e7c9-1072-49e9-868d-87e3e73c7837" name="Changes" comment="test api">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/controller/GlobalVariableController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/controller/GlobalVariableController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/GlobalVariableService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/GlobalVariableService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/mapper/TestScenarioMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/mapper/TestScenarioMapper.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend-app/src/api/variable.js" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/api/variable.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend-app/src/components/Layout.vue" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/components/Layout.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend-app/src/views/EnvironmentList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/views/EnvironmentList.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend-app/src/views/ScenarioEditor.vue" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/views/ScenarioEditor.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -50,7 +43,7 @@
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "WebServerToolWindowFactoryState": "false",
-    "git-widget-placeholder": "feature/env-ui-redesign",
+    "git-widget-placeholder": "fix/test-scenario-history-unresponsive",
     "last_opened_file_path": "/Users/cccc/IdeaProjects/GmnTestPlatform/backend/pom.xml",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",

@@ -42,7 +42,7 @@
         </el-tabs>
       </div>
      
-      <!-- Execution Result Dialog -->
+    <!-- Execution Result Dialog -->
     <el-dialog v-model="resultDialogVisible" title="Execution Results" width="70%">
        <el-table :data="executionResults" height="400">
            <el-table-column prop="caseName" label="Step Name" />
@@ -58,22 +58,17 @@
                </template>
            </el-table-column>
        </el-table>
-       
-       <!-- Inner Detail View -->
-       <el-dialog v-model="detailVisible" title="Step Detail" width="60%" append-to-body>
-          <div v-if="currentResult" class="result-detail">
-            <el-descriptions :column="1" border size="small">
-              <el-descriptions-item label="URL">{{ currentResult.requestUrl }}</el-descriptions-item>
-              <el-descriptions-item label="Method">{{ currentResult.method }}</el-descriptions-item>
-              <el-descriptions-item label="Status">{{ currentResult.responseCode }}</el-descriptions-item>
-            </el-descriptions>
-            <el-divider content-position="left">Request Body</el-divider>
-            <pre class="code-box">{{ currentResult.requestBody }}</pre>
-            <el-divider content-position="left">Response Body</el-divider>
-            <pre class="code-box">{{ currentResult.responseBody }}</pre>
-          </div>
-       </el-dialog>
     </el-dialog>
+
+    <!-- Result Detail Drawer -->
+    <el-drawer
+      v-model="detailVisible"
+      title="Step Execution Detail"
+      size="50%"
+      destroy-on-close
+    >
+      <request-response-detail :result="currentResult" />
+    </el-drawer>
 
     <!-- Real-time Console -->
     <execution-console 
@@ -125,6 +120,7 @@ import StepProperties from '../components/scenario/StepProperties.vue'
 import ExecutionConsole from '../components/scenario/ExecutionConsole.vue'
 import VariableContextViewer from '../components/scenario/VariableContextViewer.vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
+import RequestResponseDetail from '../components/testcase/RequestResponseDetail.vue'
 import { testScenarioApi } from '../api/testScenario'
 import { environmentApi } from '../api/environment'
 

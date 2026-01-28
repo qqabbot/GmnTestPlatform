@@ -14,7 +14,7 @@
           v-loading="loading"
           @row-click="handleRowClick"
           highlight-current-row
-          height="500"
+          height="100%"
         >
           <el-table-column label="Execution Time" width="180">
             <template #default="scope">
@@ -75,7 +75,7 @@
         <el-table 
           :data="stepLogs" 
           v-loading="loadingLogs"
-          height="450"
+          height="100%"
           :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
           row-key="id"
           default-expand-all
@@ -123,34 +123,16 @@
       </div>
     </div>
 
-    <!-- Log Detail Dialog -->
-    <el-dialog 
+    <!-- Log Detail Drawer -->
+    <el-drawer 
       v-model="logDetailVisible" 
       title="Step Detail" 
-      width="70%"
+      size="50%"
       append-to-body
+      destroy-on-close
     >
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="Step Name">{{ currentLog?.stepName }}</el-descriptions-item>
-        <el-descriptions-item label="Status">
-          <el-tag :type="getStatusType(currentLog?.status)">{{ currentLog?.status }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="Request URL" :span="2">{{ currentLog?.requestUrl }}</el-descriptions-item>
-        <el-descriptions-item label="Request Method">{{ currentLog?.requestMethod }}</el-descriptions-item>
-        <el-descriptions-item label="Response Code">{{ currentLog?.responseCode }}</el-descriptions-item>
-      </el-descriptions>
-
-      <el-divider content-position="left">Request Body</el-divider>
-      <pre class="code-block">{{ formatJson(currentLog?.requestBody) }}</pre>
-
-      <el-divider content-position="left">Response Body</el-divider>
-      <pre class="code-block">{{ formatJson(currentLog?.responseBody) }}</pre>
-
-      <el-divider v-if="currentLog?.errorMessage" content-position="left">Error Message</el-divider>
-      <el-alert v-if="currentLog?.errorMessage" type="error" :closable="false">
-        {{ currentLog.errorMessage }}
-      </el-alert>
-    </el-dialog>
+      <request-response-detail :result="currentLog" />
+    </el-drawer>
   </el-dialog>
 </template>
 
@@ -158,6 +140,7 @@
 import { ref, watch } from 'vue'
 import { testScenarioApi } from '../../api/testScenario'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import RequestResponseDetail from '../testcase/RequestResponseDetail.vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -271,13 +254,19 @@ const formatJson = (str) => {
 .history-container {
   display: flex;
   gap: 20px;
-  height: 500px;
+  height: calc(100vh - 250px);
+  min-height: 500px;
+  overflow: hidden;
 }
 .history-list {
-  flex: 1;
+  flex: 4;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .logs-detail {
-  flex: 1.5;
+  flex: 6;
+  min-width: 0;
   border-left: 1px solid #dcdfe6;
   padding-left: 20px;
   display: flex;
