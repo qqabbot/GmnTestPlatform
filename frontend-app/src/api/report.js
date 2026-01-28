@@ -14,5 +14,9 @@ export const reportApi = {
     // Get records by module
     getByModule(moduleId) {
         return request.get(`/reports/module/${moduleId}`)
+    },
+
+    getLogs(reportId) {
+        return request.get(`/reports/${reportId}/logs`)
     }
 }

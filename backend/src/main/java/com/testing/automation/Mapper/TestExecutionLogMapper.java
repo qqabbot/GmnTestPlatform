@@ -10,6 +10,9 @@ public interface TestExecutionLogMapper {
     @Select("SELECT * FROM test_execution_log WHERE case_id = #{caseId} ORDER BY id DESC LIMIT 50")
     List<TestExecutionLog> findByCaseId(Long caseId);
 
+    @Select("SELECT * FROM test_execution_log WHERE record_id = #{recordId} ORDER BY id ASC")
+    List<TestExecutionLog> findByRecordId(Long recordId);
+
     @Select("SELECT * FROM test_execution_log WHERE id = #{id}")
     TestExecutionLog findById(Long id);
 

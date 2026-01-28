@@ -2,11 +2,11 @@
   <el-dialog
     :model-value="visible"
     title="Report Details"
-    width="80%"
+    width="85%"
     @update:model-value="$emit('update:visible', $event)"
     destroy-on-close
   >
-    <div class="report-detail" id="report-content" v-if="report">
+    <div class="report-detail" id="report-content" v-if="report" v-loading="loadingLogs">
       <!-- Header Info -->
       <div class="detail-header">
         <div class="info-item">
@@ -27,10 +27,16 @@
         </div>
       </div>
 
-      <!-- Logs/Details -->
+      <!-- Summary Detail (Error Message etc.) -->
+      <div v-if="report.detail" class="detail-section">
+        <h3>Summary Detail</h3>
+        <pre class="log-block summary-log">{{ report.detail }}</pre>
+      </div>
+
+      <!-- Execution Logs (Structured) -->
       <div class="detail-section">
         <div class="section-header">
-          <h3>Execution Log</h3>
+          <h3>Step-by-Step logs</h3>
           <el-button 
             v-if="report.status !== 'PASS'" 
             type="warning" 
@@ -41,7 +47,49 @@
             <el-icon><MagicStick /></el-icon> AI Diagnose
           </el-button>
         </div>
-        <pre class="log-block">{{ report.detail }}</pre>
+
+        <el-collapse v-if="stepLogs.length > 0">
+          <el-collapse-item v-for="(log, index) in stepLogs" :key="log.id" :name="index">
+            <template #title>
+              <div class="log-item-title">
+                <el-tag :type="log.responseStatus >= 200 && log.responseStatus < 300 ? 'success' : 'danger'" size="small" class="status-tag">
+                  {{ log.responseStatus || 'ERR' }}
+                </el-tag>
+                <span class="step-name">{{ log.stepName }}</span>
+                <span class="request-url">{{ log.requestUrl }}</span>
+              </div>
+            </template>
+
+            <div class="log-content">
+              <el-tabs type="border-card">
+                <el-tab-pane label="Request">
+                  <div class="tab-content">
+                    <p><strong>URL:</strong> {{ log.requestUrl }}</p>
+                    <p><strong>Headers:</strong></p>
+                    <pre class="json-block">{{ formatJson(log.requestHeaders) }}</pre>
+                    <p v-if="log.requestBody"><strong>Body:</strong></p>
+                    <pre v-if="log.requestBody" class="json-block">{{ formatJson(log.requestBody) }}</pre>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="Response">
+                  <div class="tab-content">
+                    <p><strong>Status:</strong> {{ log.responseStatus }}</p>
+                    <p><strong>Headers:</strong></p>
+                    <pre class="json-block">{{ formatJson(log.responseHeaders) }}</pre>
+                    <p><strong>Body:</strong></p>
+                    <pre class="json-block">{{ formatJson(log.responseBody) }}</pre>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="Variables">
+                   <div class="tab-content">
+                    <pre class="json-block">{{ formatJson(log.variableSnapshot) }}</pre>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+        <el-empty v-else-if="!loadingLogs" description="No detailed logs available" />
       </div>
 
       <!-- AI Diagnosis Result -->
@@ -49,12 +97,6 @@
         <h3><el-icon><MagicStick /></el-icon> AI Analysis</h3>
         <div class="ai-content">{{ aiDiagnosis }}</div>
       </div>
-
-      <!-- Request/Response (Placeholder if data available) -->
-      <!-- Note: Currently the report entity might only store a summary string in 'detail'. 
-           If we have structured request/response, we would display it here. 
-           For now, we display the 'detail' field which contains the logs. -->
-      
     </div>
 
     <template #footer>
@@ -73,6 +115,7 @@ import jsPDF from 'jspdf'
 import { ElMessage } from 'element-plus'
 import { MagicStick, Download } from '@element-plus/icons-vue'
 import { aiApi } from '../api/ai'
+import { reportApi } from '../api/report'
 
 const props = defineProps({
   visible: {
@@ -88,13 +131,41 @@ const props = defineProps({
 const emit = defineEmits(['update:visible'])
 const exporting = ref(false)
 const diagnosing = ref(false)
+const loadingLogs = ref(false)
 const aiDiagnosis = ref('')
+const stepLogs = ref([])
 
-watch(() => props.visible, (newVal) => {
+watch(() => props.visible, async (newVal) => {
   if (newVal) {
     aiDiagnosis.value = ''
+    stepLogs.value = []
+    if (props.report?.id) {
+      await loadStepLogs()
+    }
   }
 })
+
+const loadStepLogs = async () => {
+  loadingLogs.value = true
+  try {
+    stepLogs.value = await reportApi.getLogs(props.report.id)
+  } catch (error) {
+    console.error('Failed to load logs:', error)
+    ElMessage.error('Failed to load detailed logs')
+  } finally {
+    loadingLogs.value = false
+  }
+}
+
+const formatJson = (val) => {
+  if (!val) return ''
+  try {
+    const obj = typeof val === 'string' ? JSON.parse(val) : val
+    return JSON.stringify(obj, null, 2)
+  } catch (e) {
+    return val
+  }
+}
 
 const handleDiagnose = async () => {
   diagnosing.value = true
@@ -102,7 +173,8 @@ const handleDiagnose = async () => {
   try {
     const result = await aiApi.diagnose({
       caseName: props.report.caseName,
-      logs: props.report.detail
+      logs: props.report.detail,
+      stepLogs: stepLogs.value // Pass richer logs to AI if possible
     })
     aiDiagnosis.value = result
   } catch (error) {
@@ -186,11 +258,59 @@ const exportPDF = async () => {
   font-family: 'Consolas', 'Monaco', monospace;
   white-space: pre-wrap;
 }
+
+.summary-log {
+  max-height: 150px;
+}
+
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.log-item-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.status-tag {
+  min-width: 45px;
+  text-align: center;
+}
+
+.step-name {
+  font-weight: bold;
+  color: #303133;
+}
+
+.request-url {
+  color: #909399;
+  font-size: 0.9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-content {
+  padding: 10px 0;
+}
+
+.tab-content {
+  font-size: 0.9em;
+}
+
+.json-block {
+  background-color: #fafafa;
+  border: 1px solid #eaeaea;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-family: monospace;
 }
 
 .ai-diagnosis {
@@ -215,3 +335,4 @@ const exportPDF = async () => {
   color: #606266;
 }
 </style>
+
