@@ -71,23 +71,50 @@
        </el-table>
     </el-dialog>
     
-    <!-- Execution History Dialog -->
-    <execution-history-dialog 
-        v-model="historyDialogVisible" 
-        :scenario-id="selectedScenarioId" 
+    <!-- Real-time Console -->
+    <execution-console 
+      ref="execConsole"
+      fixed="true"
+      v-model:visible="consoleVisible"
+      :scenario-id="selectedScenarioId"
+      :env-key="selectedRunEnv"
+      offset-left="200px"
+      @step-update="handleStepUpdate"
     />
+
+    <!-- Run Environment Dialog -->
+    <el-dialog v-model="showRunEnvDialog" title="Select Execution Environment" width="400px">
+      <el-form label-position="top">
+        <el-form-item label="Environment" required>
+          <el-select v-model="selectedRunEnv" placeholder="Select environment" style="width: 100%">
+            <el-option
+              v-for="env in environments"
+              :key="env.id"
+              :label="env.envName"
+              :value="env.envName"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRunEnvDialog = false">Cancel</el-button>
+        <el-button type="success" @click="confirmExecute" :disabled="!selectedRunEnv">Run</el-button>
+      </template>
+    </el-dialog>
 
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { testScenarioApi } from '../api/testScenario'
 import { projectApi } from '../api/project'
+import { environmentApi } from '../api/environment'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, VideoPlay, Timer } from '@element-plus/icons-vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
+import ExecutionConsole from '../components/scenario/ExecutionConsole.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -103,10 +130,18 @@ const executionResults = ref([])
 
 const historyDialogVisible = ref(false)
 const selectedScenarioId = ref(null)
+const execConsole = ref(null)
+const consoleVisible = ref(false)
+
+// Environment Selection
+const environments = ref([])
+const showRunEnvDialog = ref(false)
+const selectedRunEnv = ref('')
 
 onMounted(async () => {
     loadProjects()
     loadScenarios()
+    loadEnvironments()
 })
 
 const loadProjects = async () => {
@@ -114,6 +149,18 @@ const loadProjects = async () => {
         projects.value = await projectApi.getAll()
     } catch (e) {
         console.error(e)
+    }
+}
+
+const loadEnvironments = async () => {
+    try {
+        const data = await environmentApi.getAll()
+        environments.value = data
+        if (data.length > 0) {
+            selectedRunEnv.value = data[0].envName
+        }
+    } catch (e) {
+        console.error('Failed to load environments', e)
     }
 }
 
@@ -170,15 +217,39 @@ const deleteScenario = async (row) => {
     }
 }
 
-const openRunDialog = async (row) => {
-    // Quick run with dev env for now
-     try {
-        ElMessage.info('Executing...')
-        const results = await testScenarioApi.execute(row.id, 'dev') 
-        executionResults.value = results
-        resultDialogVisible.value = true
-    } catch (e) {
-         ElMessage.error('Execution Failed')
+const openRunDialog = (row) => {
+    selectedScenarioId.value = row.id
+    showRunEnvDialog.value = true
+}
+
+const confirmExecute = () => {
+    showRunEnvDialog.value = false
+    consoleVisible.value = true
+    nextTick(() => {
+        if (execConsole.value) {
+            execConsole.value.start()
+        }
+    })
+}
+
+const handleStepUpdate = (event) => {
+    if (event.type === 'reset') {
+        executionResults.value = []
+        return
+    }
+    
+    if (event.result) {
+        const existingIdx = executionResults.value.findIndex(r => r.caseId === event.result.caseId)
+        if (existingIdx >= 0) {
+            executionResults.value[existingIdx] = event.result
+        } else {
+            executionResults.value.push(event.result)
+        }
+    }
+    
+    // Auto show results dialog when complete
+    if (event.type === 'scenario_complete') {
+        // Optional: resultDialogVisible.value = true
     }
 }
 

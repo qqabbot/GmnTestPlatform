@@ -18,8 +18,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // 假设我们使用 Lombok 注解，实际项目中需引入 Lombok 依赖
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @RestController
 @RequestMapping("/api/cases")
+@CrossOrigin(origins = "*")
 public class TestCaseController {
 
     // 注入服务层 (需要实现)
@@ -193,10 +197,17 @@ public class TestCaseController {
             @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false) Long caseId,
             @RequestParam(defaultValue = "dev") String envKey) {
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(-1L);
 
         executorService.execute(() -> {
             try {
+                // Send an initial event to establish connection
+                emitter.send(ScenarioExecutionEvent.builder()
+                        .type("info")
+                        .payload("Connecting to execution engine...")
+                        .timestamp(System.currentTimeMillis())
+                        .build());
+
                 testCaseService.executeAllCases(projectId, moduleId, caseId, envKey, event -> {
                     try {
                         emitter.send(event);
@@ -204,8 +215,13 @@ public class TestCaseController {
                         // ignore
                     }
                 });
+
+                // Small delay to ensure client processes the last message before connection
+                // close
+                Thread.sleep(200);
                 emitter.complete();
             } catch (Exception e) {
+                log.error("SSE Execution Error: {}", e.getMessage(), e);
                 try {
                     emitter.send(ScenarioExecutionEvent.builder()
                             .type("error")

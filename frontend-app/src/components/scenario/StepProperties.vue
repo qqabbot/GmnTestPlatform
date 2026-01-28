@@ -122,6 +122,26 @@
                  />
               </el-form-item>
               
+              <el-divider content-position="left">Pre-request Script (Setup)</el-divider>
+              <el-form-item label="Groovy Script">
+                 <el-input 
+                   v-model="setupScript" 
+                   type="textarea" 
+                   :rows="3" 
+                   placeholder='vars.put("timestamp", System.currentTimeMillis())'
+                 />
+              </el-form-item>
+
+              <el-divider content-position="left">Assertion Script (Advanced)</el-divider>
+              <el-form-item label="Groovy Script">
+                 <el-input 
+                   v-model="assertionScript" 
+                   type="textarea" 
+                   :rows="3" 
+                   placeholder='assert response.code == 200'
+                 />
+              </el-form-item>
+
               <el-divider content-position="left">Variable Extraction</el-divider>
               <el-form-item label="Extract Variables from Response">
                  <el-input 
@@ -180,15 +200,6 @@
                  </el-table>
               </div>
 
-              <el-divider content-position="left">Assertion Script (Advanced)</el-divider>
-              <el-form-item label="Groovy Script">
-                 <el-input 
-                   v-model="assertionScript" 
-                   type="textarea" 
-                   :rows="3" 
-                   placeholder='assert response.code == 200'
-                 />
-              </el-form-item>
           </div>
 
        </el-form>
@@ -334,6 +345,14 @@ const extractConfig = computed({
         } catch (e) {
             // Keep invalid JSON
         }
+    }
+})
+
+// Setup Script
+const setupScript = computed({
+    get: () => dataOverrides.value.setupScript || '',
+    set: (val) => {
+        props.step.dataOverrides = { ...dataOverrides.value, setupScript: val }
     }
 })
 

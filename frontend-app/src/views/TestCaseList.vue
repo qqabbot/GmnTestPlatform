@@ -96,7 +96,8 @@
         />
       </div>
       <execution-console 
-        ref="executionConsole" 
+        ref="executionConsole"
+        v-model:visible="consoleVisible"
         :title="consoleTitle"
         :stream-url="streamUrl"
         fixed
@@ -175,17 +176,38 @@
         <el-button type="primary" @click="saveCase">Save</el-button>
       </template>
     </el-dialog>
+
+    <!-- Run Environment Dialog -->
+    <el-dialog v-model="showRunEnvDialog" title="Select Execution Environment" width="400px">
+      <el-form label-position="top">
+        <el-form-item label="Environment" required>
+          <el-select v-model="selectedRunEnv" placeholder="Select environment" style="width: 100%">
+            <el-option
+              v-for="env in environments"
+              :key="env.id"
+              :label="env.envName"
+              :value="env.envName"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRunEnvDialog = false">Cancel</el-button>
+        <el-button type="success" @click="confirmExecute" :disabled="!selectedRunEnv">Run</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Edit, Delete, VideoPlay } from '@element-plus/icons-vue'
 import { testCaseApi } from '../api/testCase'
 import { testModuleApi } from '../api/testModule'
 import { projectApi } from '../api/project'
+import { environmentApi } from '../api/environment'
 import ExecutionConsole from '@/components/scenario/ExecutionConsole.vue'
 
 const router = useRouter()
@@ -201,8 +223,15 @@ const projects = ref([])
 
 // Execution Console
 const executionConsole = ref(null)
+const consoleVisible = ref(false)
 const consoleTitle = ref('')
 const streamUrl = ref('')
+
+// Environment Selection
+const environments = ref([])
+const showRunEnvDialog = ref(false)
+const selectedRunEnv = ref('')
+const executingRow = ref(null)
 
 // Pagination
 const currentPage = ref(1)
@@ -265,6 +294,17 @@ const loadProjects = async () => {
   } catch (error) {
     ElMessage.error('Failed to load projects')
   }
+}
+
+const loadEnvironments = async () => {
+    try {
+        environments.value = await environmentApi.getAll()
+        if (environments.value.length > 0) {
+            selectedRunEnv.value = environments.value[0].envName
+        }
+    } catch (e) {
+        console.error('Failed to load environments', e)
+    }
 }
 
 const loadModules = async () => {
@@ -353,16 +393,27 @@ const deleteCase = async (id) => {
 }
 
 const handleExecute = (row) => {
+    executingRow.value = row
+    showRunEnvDialog.value = true
+}
+
+const confirmExecute = () => {
+  const row = executingRow.value
+  if (!row) return
+  
+  showRunEnvDialog.value = false
   consoleTitle.value = `Executing: ${row.caseName}`
   streamUrl.value = testCaseApi.getExecuteStreamUrl({
     caseId: row.id,
-    envKey: 'dev' // Default to dev
+    envKey: selectedRunEnv.value
   })
   
-  // Wait for refs to update if needed, but nextTick is safer or just call start
-  setTimeout(() => {
-    executionConsole.value.start()
-  }, 0)
+  consoleVisible.value = true
+  nextTick(() => {
+    if (executionConsole.value) {
+      executionConsole.value.start()
+    }
+  })
 }
 
 const handleNewCase = () => {
@@ -390,6 +441,7 @@ onMounted(() => {
   loadProjects()
   loadModules()
   loadCases()
+  loadEnvironments()
 })
 </script>
 

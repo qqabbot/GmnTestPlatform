@@ -40,17 +40,58 @@
               </template>
            </el-table-column>
            <el-table-column prop="duration" label="Time (ms)" width="100" />
-           <el-table-column prop="detail" label="Details" show-overflow-tooltip />
+           <el-table-column label="Actions" width="100">
+               <template #default="scope">
+                   <el-button type="primary" size="small" link @click="viewResultDetail(scope.row)">Details</el-button>
+               </template>
+           </el-table-column>
        </el-table>
+       
+       <!-- Inner Detail View -->
+       <el-dialog v-model="detailVisible" title="Step Detail" width="60%" append-to-body>
+          <div v-if="currentResult" class="result-detail">
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item label="URL">{{ currentResult.requestUrl }}</el-descriptions-item>
+              <el-descriptions-item label="Method">{{ currentResult.method }}</el-descriptions-item>
+              <el-descriptions-item label="Status">{{ currentResult.responseCode }}</el-descriptions-item>
+            </el-descriptions>
+            <el-divider content-position="left">Request Body</el-divider>
+            <pre class="code-box">{{ currentResult.requestBody }}</pre>
+            <el-divider content-position="left">Response Body</el-divider>
+            <pre class="code-box">{{ currentResult.responseBody }}</pre>
+          </div>
+       </el-dialog>
     </el-dialog>
 
     <!-- Real-time Console -->
     <execution-console 
-      ref="execConsole" 
+      ref="execConsole"
+      v-model:visible="consoleVisible"
       :scenario-id="scenarioId" 
+      :env-key="selectedRunEnv"
       @step-update="handleStepUpdate"
       @variables-update="handleVariablesUpdate"
     />
+
+    <!-- Run Environment Dialog -->
+    <el-dialog v-model="showRunEnvDialog" title="Select Execution Environment" width="400px">
+      <el-form label-position="top">
+        <el-form-item label="Environment" required>
+          <el-select v-model="selectedRunEnv" placeholder="Select environment" style="width: 100%">
+            <el-option
+              v-for="env in environments"
+              :key="env.id"
+              :label="env.envName"
+              :value="env.envName"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRunEnvDialog = false">Cancel</el-button>
+        <el-button type="success" @click="confirmRun" :disabled="!selectedRunEnv">Run</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Execution History Dialog -->
     <execution-history-dialog 
@@ -71,6 +112,7 @@ import ExecutionConsole from '../components/scenario/ExecutionConsole.vue'
 import VariableContextViewer from '../components/scenario/VariableContextViewer.vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
 import { testScenarioApi } from '../api/testScenario'
+import { environmentApi } from '../api/environment'
 
 const route = useRoute()
 const scenarioId = route.params.id
@@ -81,10 +123,23 @@ const selectedStep = ref(null)
 const executionResults = ref([])
 const resultDialogVisible = ref(false)
 const execConsole = ref(null)
+const consoleVisible = ref(false)
+
+// Environment Selection
+const environments = ref([])
+const showRunEnvDialog = ref(false)
+const selectedRunEnv = ref('')
 
 const rightActiveTab = ref('properties')
 const runtimeVariables = ref({})
 const historyDialogVisible = ref(false)
+const detailVisible = ref(false)
+const currentResult = ref(null)
+
+const viewResultDetail = (result) => {
+    currentResult.value = result
+    detailVisible.value = true
+}
 
 const selectedStepId = computed(() => {
     if (!selectedStep.value) return null
@@ -95,7 +150,20 @@ onMounted(async () => {
     if (scenarioId) {
         loadScenario(scenarioId)
     }
+    loadEnvironments()
 })
+
+const loadEnvironments = async () => {
+    try {
+        const data = await environmentApi.getAll()
+        environments.value = data
+        if (data.length > 0) {
+            selectedRunEnv.value = data[0].envName
+        }
+    } catch (e) {
+        console.error('Failed to load environments', e)
+    }
+}
 
 const loadScenario = async (id) => {
     try {
@@ -139,6 +207,12 @@ const saveScenario = async () => {
 }
 
 const runScenario = async () => {
+    showRunEnvDialog.value = true
+}
+
+const confirmRun = () => {
+    showRunEnvDialog.value = false
+    consoleVisible.value = true
     if (execConsole.value) {
         execConsole.value.start()
     }
@@ -147,10 +221,21 @@ const runScenario = async () => {
 const handleStepUpdate = (event) => {
     if (event.type === 'reset') {
         resetStepStatuses(steps.value)
+        executionResults.value = []
         return
     }
     
     updateStepStatus(steps.value, event.stepId, event.status)
+    
+    if (event.result) {
+        // Collect results for the summary dialog
+        const existingIdx = executionResults.value.findIndex(r => r.caseId === event.result.caseId)
+        if (existingIdx >= 0) {
+            executionResults.value[existingIdx] = event.result
+        } else {
+            executionResults.value.push(event.result)
+        }
+    }
 }
 
 const resetStepStatuses = (nodes) => {
@@ -212,5 +297,17 @@ const updateStepStatus = (nodes, stepId, status) => {
 :deep(.el-tabs__content) {
     flex: 1;
     overflow: auto;
+}
+.code-box {
+    background: #f5f7fa;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 0;
+}
+.result-detail {
+    padding: 10px;
 }
 </style>

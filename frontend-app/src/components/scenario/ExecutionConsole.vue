@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" class="execution-console" :style="consoleStyle">
+  <div v-if="visibleLocal" class="execution-console" :style="consoleStyle">
     <div class="console-header">
       <div class="header-left">
         <span class="title">{{ title }}</span>
@@ -65,10 +65,14 @@ const props = defineProps({
   offsetLeft: {
     type: String,
     default: '0px'
+  },
+  visible: {
+    type: Boolean,
+    default: false
   }
 })
 
-const visible = ref(false)
+const visibleLocal = ref(false)
 const logs = ref([])
 const status = ref('')
 const isRunning = ref(false)
@@ -82,13 +86,14 @@ const consoleStyle = computed(() => ({
   left: props.offsetLeft || '0',
   bottom: '0',
   right: '0',
-  zIndex: props.fixed ? '2000' : '100'
+  zIndex: props.fixed ? '3000' : '2500'
 }))
 
-const emit = defineEmits(['step-update', 'variables-update'])
+const emit = defineEmits(['step-update', 'variables-update', 'update:visible'])
 
 const start = () => {
-  visible.value = true
+  visibleLocal.value = true
+  emit('update:visible', true)
   logs.value = []
   status.value = 'RUNNING'
   isRunning.value = true
@@ -103,19 +108,47 @@ const start = () => {
     eventSource.close()
   }
   
+  console.log('Starting EventSource with URL:', url)
   eventSource = new EventSource(url)
   
-  eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    handleEvent(data)
+  const onMessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      handleEvent(data)
+    } catch (e) {
+      console.error('Failed to parse SSE data', e)
+    }
   }
   
-  eventSource.onerror = (err) => {
-    addLog('error', 'Connection lost or error occurred')
-    isRunning.value = false
-    status.value = 'ERROR'
-    eventSource.close()
+  const onError = (err) => {
+    // If we've already terminated the source, ignore
+    if (!eventSource) return
+    
+    // If not running, it means we probably just closed it ourselves
+    if (!isRunning.value) {
+      cleanUp()
+      return
+    }
+    
+    const errorMsg = eventSource.readyState === EventSource.CLOSED 
+      ? 'Connection closed (Check Backend logs)' 
+      : 'Connection error (SSE failed)'
+    addLog('error', `${errorMsg} [State: ${eventSource.readyState}]`)
+    cleanUp()
   }
+
+  const cleanUp = () => {
+    if (eventSource) {
+        eventSource.removeEventListener('message', onMessage)
+        eventSource.removeEventListener('error', onError)
+        eventSource.close()
+        eventSource = null
+    }
+    isRunning.value = false
+  }
+
+  eventSource.addEventListener('message', onMessage)
+  eventSource.addEventListener('error', onError)
 }
 
 const handleEvent = (event) => {
@@ -125,7 +158,8 @@ const handleEvent = (event) => {
   
   switch (event.type) {
     case 'scenario_start':
-      addLog('info', `Started scenario: ${event.stepName}`)
+    case 'case_start':
+      addLog('info', `Started: ${event.stepName}`)
       break
     case 'step_start':
       addLog('info', `-> Executing step: ${event.stepName}`)
@@ -134,19 +168,39 @@ const handleEvent = (event) => {
     case 'step_complete':
       const color = event.status === 'PASS' ? 'success' : 'fail'
       addLog(color, `<- Step completed: ${event.stepName} [${event.status}]`)
-      emit('step-update', { stepId: event.stepId, status: event.status })
+      emit('step-update', { stepId: event.stepId, status: event.status, result: event.result })
+      emit('variables-update', event.variables)
+      break
+    case 'request':
+      addLog('request', event.payload)
+      break
+    case 'response':
+      addLog('response', event.payload)
       break
     case 'scenario_complete':
-      addLog('info', `Scenario completed. Final status: ${event.status}`)
+    case 'case_complete':
+      const type = event.type === 'case_complete' ? 'Case' : 'Scenario'
+      addLog('info', `${type} completed. Final status: ${event.status}`)
       status.value = event.status
       isRunning.value = false
-      eventSource.close()
+      // No extra manual close here, it's handled by ensuring listeners are removed in cleanUp/onError
+      // or we can explicitly trigger a clean shutdown
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
+      break
+    case 'info':
+      addLog('info', event.payload)
       break
     case 'error':
       addLog('error', `Error: ${event.payload}`)
       isRunning.value = false
       status.value = 'FAIL'
-      eventSource.close()
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
       break
   }
 }
@@ -169,11 +223,17 @@ const scrollToBottom = () => {
 }
 
 const close = () => {
-  visible.value = false
+  visibleLocal.value = false
+  emit('update:visible', false)
+  isRunning.value = false
   if (eventSource) {
     eventSource.close()
   }
 }
+
+watch(() => props.visible, (newVal) => {
+  visibleLocal.value = newVal
+}, { immediate: true })
 
 const formatTime = (ts) => {
   return new Date(ts).toLocaleTimeString()
@@ -240,7 +300,7 @@ defineExpose({ start })
   color: #d4d4d4;
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  z-index: 3000;
   border-top: 1px solid #333;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
@@ -286,6 +346,8 @@ defineExpose({ start })
 .success .log-tag { color: #4ec9b0; }
 .fail .log-tag { color: #f44747; }
 .error .log-tag { color: #f44747; }
+.request .log-tag { color: #9cdcfe; } /* Light Blue */
+.response .log-tag { color: #ce9178; } /* Light Orange/Brown */
 .running { color: #ce9178; }
 
 .log-message {
