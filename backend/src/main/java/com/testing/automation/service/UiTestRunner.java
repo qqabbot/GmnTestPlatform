@@ -1,7 +1,6 @@
 package com.testing.automation.service;
 
 import com.microsoft.playwright.*;
-import com.microsoft.playwright.options.ScreenshotType;
 import com.testing.automation.Mapper.UiTestMapper;
 import com.testing.automation.model.*;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +25,14 @@ public class UiTestRunner {
     private static final Object EXECUTION_LOCK = new Object();
 
     public UiTestExecutionRecord executeCase(Long caseId) {
+        return executeCase(caseId, "server");
+    }
+
+    public UiTestExecutionRecord executeCase(Long caseId, String mode) {
+        if ("local".equalsIgnoreCase(mode)) {
+            return prepareLocalExecution(caseId);
+        }
+        
         synchronized (EXECUTION_LOCK) {
             // Ensure directories exist
             Paths.get(VIDEO_DIR).toFile().mkdirs();
@@ -378,5 +385,219 @@ public class UiTestRunner {
         } catch (NumberFormatException e) {
             return page.locator(source).count();
         }
+    }
+
+    // Local Execution Support
+    private UiTestExecutionRecord prepareLocalExecution(Long caseId) {
+        UiTestCase uiCase = uiTestMapper.findCaseById(caseId);
+        if (uiCase == null) {
+            throw new RuntimeException("Test case not found: " + caseId);
+        }
+        
+        List<UiTestStep> steps = uiTestMapper.findStepsByCaseId(caseId);
+        // Script generation is handled by generateLocalExecutionScript() method called via API
+        
+        UiTestExecutionRecord record = new UiTestExecutionRecord();
+        record.setCaseId(caseId);
+        record.setProjectId(uiCase.getProjectId());
+        record.setStatus("PENDING_LOCAL");
+        uiTestMapper.insertRecord(record);
+        
+        // Store script in record (if we add localScript field to model)
+        // For now, we'll return it in the response
+        
+        return record;
+    }
+
+    private String generateLocalExecutionScript(UiTestCase uiCase, List<UiTestStep> steps) {
+        StringBuilder script = new StringBuilder();
+        
+        // Determine browser type
+        String browserType = uiCase.getBrowserType() != null ? uiCase.getBrowserType().toLowerCase() : "chromium";
+        String browserVar = browserType;
+        
+        // Script header
+        script.append("const { ").append(browserType).append(" } = require('playwright');\n");
+        script.append("\n");
+        script.append("(async () => {\n");
+        script.append("  const browser = await ").append(browserVar).append(".launch({\n");
+        script.append("    headless: ").append(uiCase.getHeadless() != null && uiCase.getHeadless() ? "true" : "false").append(",\n");
+        script.append("    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage']\n");
+        script.append("  });\n");
+        script.append("\n");
+        script.append("  const context = await browser.newContext({\n");
+        script.append("    viewport: { width: ").append(uiCase.getViewportWidth() != null ? uiCase.getViewportWidth() : 1280)
+              .append(", height: ").append(uiCase.getViewportHeight() != null ? uiCase.getViewportHeight() : 720).append(" }\n");
+        script.append("  });\n");
+        script.append("\n");
+        script.append("  const page = await context.newPage();\n");
+        script.append("\n");
+        
+        // Apply custom headers if configured
+        if (uiCase.getCustomHeaders() != null && !uiCase.getCustomHeaders().trim().isEmpty()) {
+            try {
+                script.append("  // Apply custom headers\n");
+                script.append("  await page.setExtraHTTPHeaders(").append(uiCase.getCustomHeaders()).append(");\n");
+                script.append("\n");
+            } catch (Exception e) {
+                log.warn("Failed to parse custom headers for script generation: {}", e.getMessage());
+            }
+        }
+        
+        // Apply custom cookies if configured
+        if (uiCase.getCustomCookies() != null && !uiCase.getCustomCookies().trim().isEmpty()) {
+            try {
+                script.append("  // Apply custom cookies\n");
+                script.append("  await context.addCookies(").append(uiCase.getCustomCookies()).append(");\n");
+                script.append("\n");
+            } catch (Exception e) {
+                log.warn("Failed to parse custom cookies for script generation: {}", e.getMessage());
+            }
+        }
+        
+        // Auto-dismiss dialogs
+        if (Boolean.TRUE.equals(uiCase.getAutoDismissDialogs())) {
+            script.append("  // Auto-dismiss dialogs\n");
+            script.append("  page.on('dialog', dialog => dialog.accept());\n");
+            script.append("\n");
+        }
+        
+        // Generate step code
+        List<UiTestStepNode> rootNodes = buildStepTree(steps);
+        generateStepCode(script, rootNodes, new java.util.HashMap<>(), 2);
+        
+        script.append("\n");
+        script.append("  await browser.close();\n");
+        script.append("})();\n");
+        
+        return script.toString();
+    }
+
+    private void generateStepCode(StringBuilder script, List<UiTestStepNode> nodes, 
+                                   java.util.Map<String, Object> context, int indent) {
+        String indentStr = "  ".repeat(indent);
+        
+        for (UiTestStepNode node : nodes) {
+            UiTestStep step = node.getStep();
+            String action = step.getActionType() != null ? step.getActionType().toUpperCase() : "UNKNOWN";
+            
+            // Resolve variables
+            String selector = resolveString(step.getSelector(), context);
+            String value = resolveString(step.getValue(), context);
+            
+            if ("IF".equals(action)) {
+                script.append(indentStr).append("if (await page.locator('").append(selector).append("').isVisible()) {\n");
+                if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+                    generateStepCode(script, node.getChildren(), context, indent + 1);
+                }
+                script.append(indentStr).append("}\n");
+            } else if ("FOR".equals(action)) {
+                int count = 1;
+                try {
+                    if (step.getLoopSource() != null && !step.getLoopSource().isEmpty()) {
+                        count = Integer.parseInt(step.getLoopSource());
+                    }
+                } catch (NumberFormatException e) {
+                    // Use selector count
+                    script.append(indentStr).append("const count = await page.locator('").append(selector).append("').count();\n");
+                    script.append(indentStr).append("for (let i = 0; i < count; i++) {\n");
+                    if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+                        generateStepCode(script, node.getChildren(), context, indent + 1);
+                    }
+                    script.append(indentStr).append("}\n");
+                    continue;
+                }
+                script.append(indentStr).append("for (let i = 0; i < ").append(count).append("; i++) {\n");
+                if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+                    generateStepCode(script, node.getChildren(), context, indent + 1);
+                }
+                script.append(indentStr).append("}\n");
+            } else {
+                // Generate action code
+                switch (action) {
+                    case "NAVIGATE":
+                        script.append(indentStr).append("await page.goto('").append(value != null ? value : selector).append("');\n");
+                        break;
+                    case "CLICK":
+                        script.append(indentStr).append("await page.click('").append(selector).append("');\n");
+                        break;
+                    case "FILL":
+                        script.append(indentStr).append("await page.fill('").append(selector).append("', '").append(escapeJs(value)).append("');\n");
+                        break;
+                    case "HOVER":
+                        script.append(indentStr).append("await page.hover('").append(selector).append("');\n");
+                        break;
+                    case "DBL_CLICK":
+                        script.append(indentStr).append("await page.dblclick('").append(selector).append("');\n");
+                        break;
+                    case "RIGHT_CLICK":
+                        script.append(indentStr).append("await page.click('").append(selector).append("', { button: 'right' });\n");
+                        break;
+                    case "PRESS_KEY":
+                        script.append(indentStr).append("await page.press('").append(selector).append("', '").append(escapeJs(value)).append("');\n");
+                        break;
+                    case "SELECT_OPTION":
+                        script.append(indentStr).append("await page.selectOption('").append(selector).append("', '").append(escapeJs(value)).append("');\n");
+                        break;
+                    case "DRAG_AND_DROP":
+                        script.append(indentStr).append("await page.dragAndDrop('").append(selector).append("', '").append(escapeJs(value)).append("');\n");
+                        break;
+                    case "SCROLL_TO":
+                        script.append(indentStr).append("await page.locator('").append(selector).append("').scrollIntoViewIfNeeded();\n");
+                        break;
+                    case "WAIT_FOR_SELECTOR":
+                        script.append(indentStr).append("await page.waitForSelector('").append(selector).append("');\n");
+                        break;
+                    case "WAIT_FOR_LOAD_STATE":
+                        script.append(indentStr).append("await page.waitForLoadState();\n");
+                        break;
+                    case "ASSERT_VISIBLE":
+                        script.append(indentStr).append("if (!(await page.locator('").append(selector).append("').isVisible())) {\n");
+                        script.append(indentStr).append("  throw new Error('Element not visible: ").append(selector).append("');\n");
+                        script.append(indentStr).append("}\n");
+                        break;
+                    case "ASSERT_NOT_VISIBLE":
+                        script.append(indentStr).append("if (await page.locator('").append(selector).append("').isVisible()) {\n");
+                        script.append(indentStr).append("  throw new Error('Element is visible (expected hidden): ").append(selector).append("');\n");
+                        script.append(indentStr).append("}\n");
+                        break;
+                    case "ASSERT_TEXT":
+                        script.append(indentStr).append("const text = await page.textContent('").append(selector).append("');\n");
+                        script.append(indentStr).append("if (!text || !text.includes('").append(escapeJs(value)).append("')) {\n");
+                        script.append(indentStr).append("  throw new Error('Text mismatch. Expected: ").append(escapeJs(value)).append(", Actual: ' + text);\n");
+                        script.append(indentStr).append("}\n");
+                        break;
+                    default:
+                        script.append(indentStr).append("// Unknown action: ").append(action).append("\n");
+                        break;
+                }
+                
+                // Add delay between steps
+                script.append(indentStr).append("await page.waitForTimeout(200);\n");
+            }
+        }
+    }
+
+    private String escapeJs(String str) {
+        if (str == null) {
+            return "";
+        }
+        return str.replace("\\", "\\\\")
+                  .replace("'", "\\'")
+                  .replace("\n", "\\n")
+                  .replace("\r", "\\r")
+                  .replace("\t", "\\t");
+    }
+
+    /**
+     * Generate local execution script (public method for API)
+     */
+    public String generateLocalExecutionScript(Long caseId) {
+        UiTestCase uiCase = uiTestMapper.findCaseById(caseId);
+        if (uiCase == null) {
+            throw new RuntimeException("Test case not found: " + caseId);
+        }
+        List<UiTestStep> steps = uiTestMapper.findStepsByCaseId(caseId);
+        return generateLocalExecutionScript(uiCase, steps);
     }
 }

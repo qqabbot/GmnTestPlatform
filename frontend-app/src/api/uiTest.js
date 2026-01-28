@@ -33,8 +33,31 @@ export const uiTestApi = {
     },
 
     // Execution
-    executeCase(id) {
-        return request.post(`/ui-tests/cases/${id}/execute`);
+    executeCase(id, mode = 'server') {
+        return request.post(`/ui-tests/cases/${id}/execute?mode=${mode}`);
+    },
+    getLocalScript(id) {
+        return request.get(`/ui-tests/cases/${id}/local-script`);
+    },
+    checkPlaywright() {
+        return request.get('/ui-tests/check-playwright');
+    },
+    installPlaywright() {
+        return request.post('/ui-tests/install-playwright');
+    },
+
+    // Recording
+    startRecording(caseId, options) {
+        return request.post(`/ui-tests/cases/${caseId}/start-recording`, options);
+    },
+    stopRecording(caseId) {
+        return request.post(`/ui-tests/cases/${caseId}/stop-recording`);
+    },
+    getRecordingCode(caseId) {
+        return request.get(`/ui-tests/cases/${caseId}/recording-code`);
+    },
+    getRecordingStatus(caseId) {
+        return request.get(`/ui-tests/cases/${caseId}/recording-status`);
     },
 
     // Reports

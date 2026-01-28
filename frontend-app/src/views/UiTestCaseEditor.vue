@@ -47,6 +47,16 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="Execution Mode">
+                <el-radio-group v-model="executionMode">
+                  <el-radio label="server">Server Execution</el-radio>
+                  <el-radio label="local">Local Execution</el-radio>
+                </el-radio-group>
+                <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+                  <span v-if="executionMode === 'server'">Test runs on server (headless mode)</span>
+                  <span v-else>Test runs locally in your browser (requires Playwright installation)</span>
+                </div>
+              </el-form-item>
+              <el-form-item label="Browser Window" v-if="executionMode === 'server'">
                 <el-radio-group v-model="uiCase.headless">
                   <el-radio :label="true">Headless (Background)</el-radio>
                   <el-radio :label="false">Headed (Visible Window)</el-radio>
@@ -97,6 +107,24 @@
               <div class="step-header">
                 <span>Test Steps</span>
                 <div class="step-actions">
+                  <el-button-group>
+                    <el-button 
+                      type="warning" 
+                      size="small" 
+                      @click="handleStartRecording" 
+                      :disabled="isRecording"
+                    >
+                      <el-icon><VideoCamera /></el-icon> {{ isRecording ? 'Recording...' : 'Start Recording' }}
+                    </el-button>
+                    <el-button 
+                      type="danger" 
+                      size="small" 
+                      @click="handleStopRecording" 
+                      :disabled="!isRecording"
+                    >
+                      <el-icon><VideoPause /></el-icon> Stop Recording
+                    </el-button>
+                  </el-button-group>
                   <el-button type="info" size="small" @click="showImportDialog = true">
                     <el-icon><Upload /></el-icon> Import Code
                   </el-button>
@@ -175,6 +203,28 @@
         <el-button type="primary" @click="handleImportCode">Import</el-button>
       </template>
     </el-dialog>
+
+    <!-- Recording Dialog -->
+    <el-dialog v-model="showRecordingDialog" title="Start Recording" width="500px">
+      <el-form :model="recordingForm" label-position="top">
+        <el-form-item label="Target URL" required>
+          <el-input 
+            v-model="recordingForm.targetUrl" 
+            placeholder="https://example.com"
+            :disabled="isRecording"
+          />
+          <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+            The browser will open this URL and record your interactions
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRecordingDialog = false" :disabled="isRecording">Cancel</el-button>
+        <el-button type="primary" @click="confirmStartRecording" :disabled="isRecording || !recordingForm.targetUrl">
+          Start Recording
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -182,7 +232,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, VideoPlay, Check, Plus, Delete, Upload } from '@element-plus/icons-vue'
+import { ArrowLeft, VideoPlay, Check, Plus, Delete, Upload, VideoCamera, VideoPause } from '@element-plus/icons-vue'
 import { uiTestApi } from '../api/uiTest'
 import { projectApi } from '../api/project'
 import { testModuleApi } from '../api/testModule'
@@ -195,6 +245,15 @@ const projects = ref([])
 const modules = ref([])
 const showImportDialog = ref(false)
 const importCode = ref('')
+const isRecording = ref(false)
+const showRecordingDialog = ref(false)
+const recordingForm = ref({
+  targetUrl: ''
+})
+let recordingWebSocket = null
+const executionMode = ref('server')
+const playwrightInstalled = ref(false)
+const checkingPlaywright = ref(false)
 
 const uiCase = ref({
   name: '',
@@ -425,6 +484,15 @@ const handleExecute = async () => {
             return
         }
 
+        // Check Playwright installation for local mode
+        if (executionMode.value === 'local') {
+            const installed = await checkAndInstallPlaywright()
+            if (!installed) {
+                ElMessage.warning('Playwright installation is required for local execution')
+                return
+            }
+        }
+
         // 1. Auto-save current state before execution to ensure backend gets latest settings (headless, etc.)
         const payload = {
             ...uiCase.value,
@@ -434,21 +502,122 @@ const handleExecute = async () => {
         uiCase.value.id = savedCase.id // Update ID if it was a new case
 
         // 2. Execute
-        ElMessage.info('Saving and starting execution...')
-        const record = await uiTestApi.executeCase(uiCase.value.id)
-        
-        if (record.status === 'FAILURE') {
-            ElMessageBox.alert(record.errorMessage || 'Unknown error', 'Execution Failed', {
-                confirmButtonText: 'OK',
-                type: 'error'
-            })
+        if (executionMode.value === 'local') {
+            await handleLocalExecute()
         } else {
-            ElMessage.success('Execution successful')
-            router.push(`/ui-testing/reports/${record.id}`)
+            await handleServerExecute()
         }
     } catch (e) {
         console.error('Execution Error:', e)
         ElMessage.error('Execution failed: ' + (e.response?.data?.message || e.message || 'Server error'))
+    }
+}
+
+const handleServerExecute = async () => {
+    ElMessage.info('Saving and starting execution...')
+    const record = await uiTestApi.executeCase(uiCase.value.id, 'server')
+    
+    if (record.status === 'FAILURE') {
+        ElMessageBox.alert(record.errorMessage || 'Unknown error', 'Execution Failed', {
+            confirmButtonText: 'OK',
+            type: 'error'
+        })
+    } else {
+        ElMessage.success('Execution successful')
+        router.push(`/ui-testing/reports/${record.id}`)
+    }
+}
+
+const handleLocalExecute = async () => {
+    try {
+        ElMessage.info('Generating local execution script...')
+        
+        // Get local script
+        const response = await uiTestApi.getLocalScript(uiCase.value.id)
+        if (!response.success || !response.script) {
+            ElMessage.error('Failed to generate local execution script')
+            return
+        }
+        
+        // Show script in a simple dialog
+        ElMessageBox.prompt(
+            `Local execution script generated.\n\nTo run locally:\n1. Save the script below as test.js\n2. Run: node test.js\n\nScript:\n\n${response.script}`,
+            'Local Execution Script',
+            {
+                confirmButtonText: 'Copy Script',
+                cancelButtonText: 'Close',
+                inputType: 'textarea',
+                inputValue: response.script,
+                inputPlaceholder: 'Script will be copied to clipboard',
+                inputAttributes: {
+                    readonly: true,
+                    rows: 20
+                }
+            }
+        ).then(() => {
+            // Copy to clipboard
+            navigator.clipboard.writeText(response.script).then(() => {
+                ElMessage.success('Script copied to clipboard')
+            }).catch(() => {
+                ElMessage.warning('Failed to copy to clipboard. Please copy manually.')
+            })
+        }).catch(() => {
+            // User cancelled, do nothing
+        })
+    } catch (e) {
+        if (e !== 'cancel') {
+            console.error('Local execution error:', e)
+            ElMessage.error('Failed to generate local script: ' + (e.response?.data?.error || e.message || 'Server error'))
+        }
+    }
+}
+
+const checkAndInstallPlaywright = async () => {
+    if (playwrightInstalled.value) {
+        return true
+    }
+    
+    checkingPlaywright.value = true
+    try {
+        const response = await uiTestApi.checkPlaywright()
+        if (response.installed) {
+            playwrightInstalled.value = true
+            checkingPlaywright.value = false
+            return true
+        }
+        
+        // Not installed, ask user to install
+        await ElMessageBox.confirm(
+            'Playwright browsers are not installed. Would you like to install them now?',
+            'Playwright Installation Required',
+            {
+                type: 'warning',
+                confirmButtonText: 'Install',
+                cancelButtonText: 'Cancel'
+            }
+        )
+        
+        // Install
+        ElMessage.info('Installing Playwright browsers... This may take a few minutes.')
+        const installResponse = await uiTestApi.installPlaywright()
+        
+        if (installResponse.success) {
+            playwrightInstalled.value = true
+            ElMessage.success('Playwright browsers installation initiated. They will be downloaded automatically on first use.')
+            return true
+        } else {
+            ElMessage.error('Failed to install Playwright: ' + (installResponse.error || 'Unknown error'))
+            return false
+        }
+    } catch (e) {
+        if (e === 'cancel') {
+            return false
+        }
+        console.error('Check Playwright error:', e)
+        ElMessage.error('Failed to check Playwright installation: ' + (e.response?.data?.error || e.message || 'Server error'))
+        return false
+    } finally {
+        checkingPlaywright.value = false
     }
 }
 
@@ -546,8 +715,147 @@ const handleImportCode = () => {
   }
 }
 
+// Recording functions
+const handleStartRecording = () => {
+  if (!isEditMode.value && !uiCase.value.id) {
+    ElMessage.warning('Please save the test case first before recording')
+    return
+  }
+  
+  // Use startUrl if available, otherwise show dialog
+  if (uiCase.value.startUrl) {
+    recordingForm.value.targetUrl = uiCase.value.startUrl
+    confirmStartRecording()
+  } else {
+    showRecordingDialog.value = true
+  }
+}
+
+const confirmStartRecording = async () => {
+  if (!recordingForm.value.targetUrl || !recordingForm.value.targetUrl.trim()) {
+    ElMessage.warning('Please enter a target URL')
+    return
+  }
+
+  try {
+    // Ensure case is saved first
+    if (!uiCase.value.id) {
+      const payload = {
+        ...uiCase.value,
+        steps: steps.value
+      }
+      const savedCase = await uiTestApi.saveCase(payload)
+      uiCase.value.id = savedCase.id
+    }
+
+    // Start recording
+    await uiTestApi.startRecording(uiCase.value.id, {
+      targetUrl: recordingForm.value.targetUrl
+    })
+
+    // Connect WebSocket
+    connectRecordingWebSocket()
+
+    isRecording.value = true
+    showRecordingDialog.value = false
+    ElMessage.success('Recording started! Please interact with the browser window.')
+  } catch (e) {
+    console.error('Start recording error:', e)
+    ElMessage.error('Failed to start recording: ' + (e.response?.data?.error || e.message || 'Server error'))
+  }
+}
+
+const handleStopRecording = async () => {
+  try {
+    await uiTestApi.stopRecording(uiCase.value.id)
+
+    // Close WebSocket
+    if (recordingWebSocket) {
+      recordingWebSocket.close()
+      recordingWebSocket = null
+    }
+
+    // Get recorded code and import
+    const response = await uiTestApi.getRecordingCode(uiCase.value.id)
+    if (response.code && response.code.trim()) {
+      importCode.value = response.code
+      handleImportCode()
+      ElMessage.success('Recording stopped and steps imported successfully')
+    } else {
+      ElMessage.warning('Recording stopped, but no code was generated')
+    }
+
+    isRecording.value = false
+    recordingForm.value.targetUrl = ''
+  } catch (e) {
+    console.error('Stop recording error:', e)
+    ElMessage.error('Failed to stop recording: ' + (e.response?.data?.error || e.message || 'Server error'))
+    isRecording.value = false
+  }
+}
+
+const connectRecordingWebSocket = () => {
+  if (!uiCase.value.id) {
+    return
+  }
+
+  // Determine WebSocket URL
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host
+  const wsUrl = `${protocol}//${host}/api/ui-tests/recording/${uiCase.value.id}`
+
+  try {
+    recordingWebSocket = new WebSocket(wsUrl)
+
+    recordingWebSocket.onopen = () => {
+      console.log('Recording WebSocket connected')
+    }
+
+    recordingWebSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'code') {
+          // Real-time code updates (optional - we'll get full code on stop)
+          console.log('Received code line:', data.code)
+        }
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e)
+      }
+    }
+
+    recordingWebSocket.onerror = (error) => {
+      console.error('Recording WebSocket error:', error)
+      ElMessage.warning('WebSocket connection error. Recording may still work.')
+    }
+
+    recordingWebSocket.onclose = () => {
+      console.log('Recording WebSocket closed')
+      recordingWebSocket = null
+    }
+  } catch (e) {
+    console.error('Failed to create WebSocket connection:', e)
+    ElMessage.warning('WebSocket connection failed. Recording may still work.')
+  }
+}
+
 // Use route guard to ensure clean navigation
 onBeforeRouteLeave((to, from, next) => {
+  // Stop recording if active
+  if (isRecording.value) {
+    ElMessageBox.confirm('Recording is in progress. Stop recording before leaving?', 'Warning', {
+      type: 'warning',
+      confirmButtonText: 'Stop & Leave',
+      cancelButtonText: 'Cancel'
+    }).then(() => {
+      handleStopRecording().finally(() => {
+        next()
+      })
+    }).catch(() => {
+      // User cancelled, stay on page
+    })
+    return
+  }
+  
   // Close any open dialogs before navigation
   if (showImportDialog.value) {
     showImportDialog.value = false
@@ -559,9 +867,30 @@ onBeforeRouteLeave((to, from, next) => {
   }
 })
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  // Check Playwright installation status if in local mode
+  if (executionMode.value === 'local') {
+    checkAndInstallPlaywright().catch(() => {
+      // Silent fail on mount
+    })
+  }
+})
 
 onBeforeUnmount(() => {
+  // Clean up WebSocket connection
+  if (recordingWebSocket) {
+    recordingWebSocket.close()
+    recordingWebSocket = null
+  }
+  
+  // Stop recording if active
+  if (isRecording.value && uiCase.value.id) {
+    uiTestApi.stopRecording(uiCase.value.id).catch(err => {
+      console.error('Failed to stop recording on unmount:', err)
+    })
+  }
+  
   // Don't modify reactive state during unmount as it can cause
   // Element Plus components (like menu) to access destroyed DOM elements
   // Vue will automatically handle component cleanup
