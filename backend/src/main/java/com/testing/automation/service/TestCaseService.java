@@ -48,7 +48,6 @@ public class TestCaseService {
     private final WebClient webClient;
     private final Retry retry;
     private final CircuitBreaker circuitBreaker;
-    private final ScriptEngine groovyEngine = new ScriptEngineManager().getEngineByName("groovy");
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final org.springframework.expression.ExpressionParser spelParser = new org.springframework.expression.spel.standard.SpelExpressionParser();
 
@@ -922,12 +921,17 @@ public class TestCaseService {
 
     public Object executeScript(String script, Map<String, Object> variables) {
         try {
-            log.debug("Executing Groovy script: {}", script);
-            Object evalResult = null;
+            log.debug("Executing Groovy script (Isolated Engine): {}", script);
+
+            // Create a new script engine instance for each execution to ensure isolation
+            ScriptEngine engine = new ScriptEngineManager().getEngineByName("groovy");
+
+            // Provide 'vars' for direct Map manipulation (for compatibility)
+            Map<String, Object> varsProxy = new HashMap<>(variables);
+            engine.put("vars", varsProxy);
 
             // Provide helper functions
-            groovyEngine.put("vars", variables);
-            groovyEngine.eval("def jsonPath(response, path) { " +
+            engine.eval("def jsonPath(response, path) { " +
                     "try { " +
                     "  return com.jayway.jsonpath.JsonPath.read(response.getBody() ?: '{}', path); " +
                     "} catch (Exception e) { " +
@@ -935,24 +939,36 @@ public class TestCaseService {
                     "}" +
                     "}");
 
+            // Provide dynamic random supplier helper
+            engine.eval("def randomSupplier(list) { " +
+                    "  return { -> list[new Random().nextInt(list.size())] } as java.util.function.Supplier " +
+                    "}");
+
             // Inject variables directly for easier access
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                groovyEngine.put(entry.getKey(), entry.getValue());
+                engine.put(entry.getKey(), entry.getValue());
             }
-            evalResult = groovyEngine.eval(script);
 
-            // Update variables if modified in script
-            if (groovyEngine.get("vars") instanceof Map) {
-                variables.putAll((Map<String, Object>) groovyEngine.get("vars"));
-            } else {
-                log.warn("Groovy script 'vars' object is not a Map after execution. Variables might not be updated.");
+            Object evalResult = engine.eval(script);
+
+            // Update variables back from varsProxy and engine context
+            variables.putAll(varsProxy);
+
+            // Also pick up any variables that were put directly onto the engine
+            for (String key : engine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE).keySet()) {
+                if (!"vars".equals(key) && !key.equals("jsonPath") && !key.equals("context")) {
+                    Object val = engine.get(key);
+                    if (val != null) {
+                        variables.put(key, val);
+                    }
+                }
             }
-            log.debug("Groovy script executed successfully. Result: {}", evalResult);
+
+            log.debug("Groovy script executed. Vars snapshot: {}", variables);
             return evalResult;
         } catch (Exception e) {
             log.error("Script execution failed: {}", e.getMessage(), e);
             System.err.println("Script execution failed: " + e.getMessage());
-            e.printStackTrace();
             return null;
         }
     }
@@ -971,22 +987,37 @@ public class TestCaseService {
             String replacement = null;
 
             try {
-                // Strategy 1: If it's a simple index access like idList[0]
-                if (expression.matches("^[a-zA-Z0-9_]+\\[\\d+\\]$")) {
+                // Strategy 1: If it's a simple index access like idList[0] or idList[random]
+                if (expression.matches("^[a-zA-Z0-9_]+\\[(\\d+|random)\\]$")) {
                     int openBracket = expression.indexOf("[");
                     String varName = expression.substring(0, openBracket);
-                    int index = Integer.parseInt(expression.substring(openBracket + 1, expression.length() - 1));
+                    String indexStr = expression.substring(openBracket + 1, expression.length() - 1);
                     Object obj = variables.get(varName);
 
-                    if (obj instanceof List) {
-                        List<?> list = (List<?>) obj;
-                        if (index >= 0 && index < list.size()) {
-                            replacement = String.valueOf(list.get(index));
+                    if (obj instanceof List || (obj != null && obj.getClass().isArray())) {
+                        List<?> list = null;
+                        Object[] arr = null;
+                        int size = 0;
+
+                        if (obj instanceof List) {
+                            list = (List<?>) obj;
+                            size = list.size();
+                        } else {
+                            arr = (Object[]) obj;
+                            size = arr.length;
                         }
-                    } else if (obj != null && obj.getClass().isArray()) {
-                        Object[] arr = (Object[]) obj;
-                        if (index >= 0 && index < arr.length) {
-                            replacement = String.valueOf(arr[index]);
+
+                        if (size > 0) {
+                            int index;
+                            if ("random".equals(indexStr)) {
+                                index = new Random().nextInt(size);
+                            } else {
+                                index = Integer.parseInt(indexStr);
+                            }
+
+                            if (index >= 0 && index < size) {
+                                replacement = String.valueOf(list != null ? list.get(index) : arr[index]);
+                            }
                         }
                     }
                 }
@@ -1006,6 +1037,9 @@ public class TestCaseService {
                 // Strategy 3: Simple variable lookup
                 if (replacement == null) {
                     Object value = variables.get(expression);
+                    if (value instanceof java.util.function.Supplier) {
+                        value = ((java.util.function.Supplier<?>) value).get();
+                    }
                     if (value != null) {
                         replacement = value.toString();
                     }

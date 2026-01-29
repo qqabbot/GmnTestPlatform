@@ -916,8 +916,10 @@ const handleRun = () => {
 
 const executeDryRun = async () => {
   if (isUnmounted.value) return
+  // Keep loading true throughout save + dry-run
+  store.loading = true
   try {
-    await store.saveCase()
+    await store.saveCase({ suppressLoading: true })
     await store.runDryRun(dryRunEnv.value)
     if (isUnmounted.value) return
     isDryRun.value = true
@@ -925,6 +927,8 @@ const executeDryRun = async () => {
     showResult.value = true
   } catch (error) {
     // Error already handled by store/message
+  } finally {
+    store.loading = false
   }
 }
 
@@ -940,8 +944,15 @@ const executeRun = async () => {
 
 // Use route guard to close dialogs before navigation
 onBeforeRouteLeave((to, from, next) => {
-  // Mark as unmounted immediately to prevent any async state updates
-  isUnmounted.value = true
+  // Only mark as unmounted if we are truly leaving the editor context
+  // (to prevent blocking actions when navigating between /new and /:id/edit)
+  const isTransitioningInsideEditor = 
+    (to.name === 'EditAPITestCase' || to.name === 'NewAPITestCase') &&
+    (from.name === 'EditAPITestCase' || from.name === 'NewAPITestCase');
+    
+  if (!isTransitioningInsideEditor) {
+    isUnmounted.value = true
+  }
   
   // Close all dialogs and drawers before navigation to prevent DOM access errors
   const hasOpenDialogs = showDryRunDialog.value || showExecuteDialog.value || showCurlDialog.value || 
@@ -959,14 +970,12 @@ onBeforeRouteLeave((to, from, next) => {
   }
   
   // Use requestAnimationFrame to ensure all DOM updates and component cleanup
-  // operations complete before navigation. This prevents Element Plus components
-  // from accessing destroyed DOM elements.
+  // operations complete before navigation.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       try {
         next()
       } catch (error) {
-        // If navigation fails, try again after a brief delay
         console.debug('Navigation retry:', error)
         setTimeout(() => {
           next()
@@ -974,6 +983,15 @@ onBeforeRouteLeave((to, from, next) => {
       }
     })
   })
+})
+
+// Watch for route changes to handle component reuse (e.g., Save as New -> Edit)
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId !== oldId && !isUnmounted.value) {
+    // Reset unmounted state if we are reused
+    isUnmounted.value = false
+    loadData()
+  }
 })
 
 onMounted(() => {

@@ -7,14 +7,18 @@ import java.util.regex.Pattern;
 
 /**
  * Parser for cURL commands
- * Supports parsing HTTP method, URL, headers, and body from cURL command strings
+ * Supports parsing HTTP method, URL, headers, and body from cURL command
+ * strings
  */
 public class CurlParser {
-    
-    private static final Pattern METHOD_PATTERN = Pattern.compile("-X\\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern URL_PATTERN = Pattern.compile("(?:curl|--location)\\s+['\"](https?://[^'\"\\s]+)['\"]|['\"](https?://[^'\"\\s]+)['\"]", Pattern.CASE_INSENSITIVE);
-    private static final Pattern HEADER_PATTERN = Pattern.compile("(?:-H|--header)\\s+['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-    
+
+    private static final Pattern METHOD_PATTERN = Pattern.compile(
+            "(?:-X|--request)\\s*['\"]?(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)['\"]?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern URL_PATTERN = Pattern
+            .compile("(?:curl|--location)?\\s*['\"]?(https?://[^'\"\\s]+)['\"]?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HEADER_PATTERN = Pattern.compile("(?:-H|--header)\\s+['\"]([^'\"]+)['\"]",
+            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+
     /**
      * Parse cURL command and extract HTTP request details
      * 
@@ -26,22 +30,24 @@ public class CurlParser {
         if (curlCommand == null || curlCommand.trim().isEmpty()) {
             throw new IllegalArgumentException("cURL command cannot be empty");
         }
-        
-        // Normalize: replace line continuations (backslash + newline) with space, but keep actual newlines for multiline matching
+
+        // Normalize: replace line continuations (backslash + newline) with space, but
+        // keep actual newlines for multiline matching
         String normalized = curlCommand.replaceAll("\\\\\\s*\n\\s*", " ").replaceAll("\\\\\\s*\r\\s*\n\\s*", " ");
-        
+
         CurlParseResult result = new CurlParseResult();
-        
+
         // Parse method (default to GET if not specified, but POST if --data is present)
         Matcher methodMatcher = METHOD_PATTERN.matcher(normalized);
         if (methodMatcher.find()) {
             result.setMethod(methodMatcher.group(1).toUpperCase());
-        } else if (normalized.contains("--data") || normalized.contains("--data-raw") || normalized.contains("--data-binary")) {
+        } else if (normalized.contains("--data") || normalized.contains("--data-raw")
+                || normalized.contains("--data-binary") || normalized.contains(" -d ")) {
             result.setMethod("POST");
         } else {
             result.setMethod("GET");
         }
-        
+
         // Parse URL - look for URL after curl or --location
         Matcher urlMatcher = URL_PATTERN.matcher(normalized);
         String url = null;
@@ -51,7 +57,7 @@ public class CurlParser {
                 break;
             }
         }
-        
+
         if (url == null || url.isEmpty()) {
             // Fallback: try to find any URL pattern
             Pattern fallbackUrlPattern = Pattern.compile("['\"](https?://[^'\"\\s]+)['\"]", Pattern.CASE_INSENSITIVE);
@@ -60,13 +66,13 @@ public class CurlParser {
                 url = fallbackMatcher.group(1);
             }
         }
-        
+
         if (url == null || url.isEmpty()) {
             throw new IllegalArgumentException("Could not parse URL from cURL command");
         }
-        
+
         result.setUrl(url);
-        
+
         // Parse headers - support both -H and --header, handle multiline
         Map<String, String> headers = new HashMap<>();
         Matcher headerMatcher = HEADER_PATTERN.matcher(normalized);
@@ -80,46 +86,50 @@ public class CurlParser {
             }
         }
         result.setHeaders(headers);
-        
-        // Parse body (check multiple patterns) - handle multiline JSON with escaped quotes
+
+        // Parse body (check multiple patterns) - handle multiline JSON with escaped
+        // quotes
         String body = parseDataBody(normalized);
         result.setBody(body);
-        
+
         return result;
     }
-    
+
     /**
      * Parse data body from cURL command, handling escaped quotes in JSON
      */
     private static String parseDataBody(String normalized) {
         // Try different data patterns
         String[] patterns = {
-            "--data-raw\\s+",
-            "--data-binary\\s+",
-            "--data-ascii\\s+",
-            "--data\\s+"
+                "--data-raw\\s+",
+                "--data-binary\\s+",
+                "--data-ascii\\s+",
+                "--data\\s+",
+                "-d\\s+"
         };
-        
+
         for (String patternPrefix : patterns) {
             Pattern pattern = Pattern.compile(patternPrefix, Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(normalized);
-            
+
             if (matcher.find()) {
                 int startPos = matcher.end();
-                
+
                 // Find the opening quote (single or double)
-                if (startPos >= normalized.length()) continue;
-                
+                if (startPos >= normalized.length())
+                    continue;
+
                 char quoteChar = normalized.charAt(startPos);
-                if (quoteChar != '\'' && quoteChar != '"') continue;
-                
+                if (quoteChar != '\'' && quoteChar != '"')
+                    continue;
+
                 // Find the matching closing quote, handling escaped quotes
                 StringBuilder bodyBuilder = new StringBuilder();
                 boolean escaped = false;
-                
+
                 for (int i = startPos + 1; i < normalized.length(); i++) {
                     char c = normalized.charAt(i);
-                    
+
                     if (escaped) {
                         bodyBuilder.append(c);
                         escaped = false;
@@ -133,29 +143,30 @@ public class CurlParser {
                         bodyBuilder.append(c);
                     }
                 }
-                
+
                 String body = bodyBuilder.toString();
                 if (!body.isEmpty()) {
                     return unescapeQuotes(body);
                 }
             }
         }
-        
+
         return null;
     }
-    
+
     /**
      * Unescape quotes and special characters in cURL data
      */
     private static String unescapeQuotes(String str) {
-        if (str == null) return null;
+        if (str == null)
+            return null;
         return str.replace("\\\"", "\"")
-                  .replace("\\'", "'")
-                  .replace("\\n", "\n")
-                  .replace("\\t", "\t")
-                  .replace("\\\\", "\\");
+                .replace("\\'", "'")
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\\\", "\\");
     }
-    
+
     /**
      * Check if a string looks like a cURL command
      */
@@ -164,10 +175,10 @@ public class CurlParser {
             return false;
         }
         String trimmed = text.trim();
-        return trimmed.toLowerCase().startsWith("curl") || 
-               (trimmed.contains("-H") && trimmed.contains("http"));
+        return trimmed.toLowerCase().startsWith("curl") ||
+                (trimmed.contains("-H") && trimmed.contains("http"));
     }
-    
+
     /**
      * Result class for parsed cURL command
      */
@@ -176,39 +187,39 @@ public class CurlParser {
         private String url;
         private Map<String, String> headers = new HashMap<>();
         private String body;
-        
+
         public String getMethod() {
             return method;
         }
-        
+
         public void setMethod(String method) {
             this.method = method;
         }
-        
+
         public String getUrl() {
             return url;
         }
-        
+
         public void setUrl(String url) {
             this.url = url;
         }
-        
+
         public Map<String, String> getHeaders() {
             return headers;
         }
-        
+
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers;
         }
-        
+
         public String getBody() {
             return body;
         }
-        
+
         public void setBody(String body) {
             this.body = body;
         }
-        
+
         /**
          * Convert headers map to JSON string
          */
@@ -219,9 +230,10 @@ public class CurlParser {
             StringBuilder sb = new StringBuilder("{");
             boolean first = true;
             for (Map.Entry<String, String> entry : headers.entrySet()) {
-                if (!first) sb.append(",");
+                if (!first)
+                    sb.append(",");
                 sb.append("\"").append(entry.getKey()).append("\":\"")
-                  .append(entry.getValue().replace("\"", "\\\"")).append("\"");
+                        .append(entry.getValue().replace("\"", "\\\"")).append("\"");
                 first = false;
             }
             sb.append("}");
@@ -229,4 +241,3 @@ public class CurlParser {
         }
     }
 }
-

@@ -60,8 +60,8 @@ export const useTestCaseStore = defineStore('testCase', () => {
         }
     }
 
-    const saveCase = async () => {
-        loading.value = true
+    const saveCase = async (options = { suppressLoading: false }) => {
+        if (!options.suppressLoading) loading.value = true
         try {
             // Validate moduleId before saving
             if (!currentCase.value.moduleId) {
@@ -106,7 +106,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
             ElMessage.error('Failed to save test case: ' + (error.message || error.response?.data?.message || 'Unknown error'))
             throw error
         } finally {
-            loading.value = false
+            if (!options.suppressLoading) loading.value = false
         }
     }
 
@@ -162,7 +162,7 @@ export const useTestCaseStore = defineStore('testCase', () => {
                 if (!currentCase.value.moduleId) {
                     throw new Error('Please select a project and module, then click Save before running the test case.')
                 }
-                await saveCase()
+                await saveCase({ suppressLoading: true })
             }
 
             // Execute single case - pass caseId to execute only this case
