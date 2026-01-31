@@ -19,5 +19,10 @@ export const variableApi = {
     // Delete variable
     delete(id) {
         return request.delete(`/variables/${id}`)
+    },
+
+    // Bulk sync variables
+    sync(envId, data) {
+        return request.post(`/variables/environment/${envId}/sync`, data)
     }
 }

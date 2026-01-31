@@ -4,6 +4,7 @@ import com.testing.automation.Mapper.GlobalVariableMapper;
 import com.testing.automation.model.GlobalVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -30,7 +31,7 @@ public class GlobalVariableService {
         if (variable.getModule() != null && variable.getModule().getId() != null) {
             variable.setModuleId(variable.getModule().getId());
         }
-        
+
         variable.setCreatedAt(LocalDateTime.now());
         variable.setUpdatedAt(LocalDateTime.now());
         variableMapper.insert(variable);
@@ -52,7 +53,7 @@ public class GlobalVariableService {
             var.setValueContent(varDetails.getValueContent());
             var.setType(varDetails.getType());
             var.setDescription(varDetails.getDescription());
-            
+
             // Extract IDs from nested objects if present
             if (varDetails.getEnvironment() != null && varDetails.getEnvironment().getId() != null) {
                 var.setEnvironmentId(varDetails.getEnvironment().getId());
@@ -63,7 +64,7 @@ public class GlobalVariableService {
             if (varDetails.getModule() != null && varDetails.getModule().getId() != null) {
                 var.setModuleId(varDetails.getModule().getId());
             }
-            
+
             var.setUpdatedAt(LocalDateTime.now());
             variableMapper.update(var);
         }
@@ -76,6 +77,48 @@ public class GlobalVariableService {
 
     public List<GlobalVariable> getVariablesByEnvironmentId(Long envId) {
         return variableMapper.findByEnvironmentId(envId);
+    }
+
+    @Transactional
+    public void syncVariables(Long envId, Map<String, String> newVariables) {
+        // 1. Get existing variables for this environment
+        List<GlobalVariable> existingVars = variableMapper.findByEnvironmentId(envId);
+        Map<String, GlobalVariable> existingMap = new HashMap<>();
+        for (GlobalVariable v : existingVars) {
+            existingMap.put(v.getKeyName(), v);
+        }
+
+        // 2. Process new variables
+        for (Map.Entry<String, String> entry : newVariables.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            if (existingMap.containsKey(key)) {
+                // Update existing
+                GlobalVariable existing = existingMap.get(key);
+                if (!value.equals(existing.getValueContent())) {
+                    existing.setValueContent(value);
+                    existing.setUpdatedAt(LocalDateTime.now());
+                    variableMapper.update(existing);
+                }
+                existingMap.remove(key); // Mark as processed
+            } else {
+                // Create new
+                GlobalVariable newVar = new GlobalVariable();
+                newVar.setKeyName(key);
+                newVar.setValueContent(value);
+                newVar.setEnvironmentId(envId);
+                newVar.setType("STRING");
+                newVar.setCreatedAt(LocalDateTime.now());
+                newVar.setUpdatedAt(LocalDateTime.now());
+                variableMapper.insert(newVar);
+            }
+        }
+
+        // 3. Delete variables not in the new map
+        for (GlobalVariable toDelete : existingMap.values()) {
+            variableMapper.deleteById(toDelete.getId());
+        }
     }
 
     // Additional methods for test execution
@@ -106,34 +149,34 @@ public class GlobalVariableService {
 
         // Order: Global -> Project -> Module -> Environment
         // Process in priority order to ensure correct override behavior
-        
+
         // 1. Global variables (no project, module, or environment)
         for (GlobalVariable var : variables) {
             if (var.getProjectId() == null && var.getModuleId() == null && var.getEnvironmentId() == null) {
                 map.put(var.getKeyName(), var.getValueContent());
             }
         }
-        
+
         // 2. Project variables (override Global)
         if (projectId != null) {
             for (GlobalVariable var : variables) {
-                if (var.getProjectId() != null && var.getProjectId().equals(projectId) 
-                    && var.getModuleId() == null && var.getEnvironmentId() == null) {
+                if (var.getProjectId() != null && var.getProjectId().equals(projectId)
+                        && var.getModuleId() == null && var.getEnvironmentId() == null) {
                     map.put(var.getKeyName(), var.getValueContent());
                 }
             }
         }
-        
+
         // 3. Module variables (override Project)
         if (moduleId != null) {
             for (GlobalVariable var : variables) {
-                if (var.getModuleId() != null && var.getModuleId().equals(moduleId) 
-                    && var.getEnvironmentId() == null) {
+                if (var.getModuleId() != null && var.getModuleId().equals(moduleId)
+                        && var.getEnvironmentId() == null) {
                     map.put(var.getKeyName(), var.getValueContent());
                 }
             }
         }
-        
+
         // 4. Environment variables (override all)
         for (GlobalVariable var : variables) {
             if (var.getEnvironmentId() != null) {
@@ -149,7 +192,7 @@ public class GlobalVariableService {
                 }
             }
         }
-        
+
         return map;
     }
 }

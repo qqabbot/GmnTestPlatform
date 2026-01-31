@@ -75,9 +75,23 @@
               </template>
            </el-table-column>
            <el-table-column prop="duration" label="Time (ms)" width="100" />
-           <el-table-column prop="detail" label="Details" show-overflow-tooltip />
+           <el-table-column label="Actions" width="100" fixed="right">
+               <template #default="scope">
+                   <el-button type="primary" size="small" link @click="viewResultDetail(scope.row)">Details</el-button>
+               </template>
+           </el-table-column>
        </el-table>
     </el-dialog>
+
+    <!-- Result Detail Drawer -->
+    <el-drawer
+      v-model="detailVisible"
+      title="Step Execution Detail"
+      size="50%"
+      destroy-on-close
+    >
+      <request-response-detail :result="currentResult" />
+    </el-drawer>
     
     <!-- Real-time Console -->
     <execution-console 
@@ -110,6 +124,12 @@
       </template>
     </el-dialog>
 
+    <!-- Execution History Dialog -->
+    <execution-history-dialog 
+      v-model="historyDialogVisible" 
+      :scenario-id="selectedScenarioId" 
+    />
+
   </div>
 </template>
 
@@ -123,6 +143,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, VideoPlay, Timer } from '@element-plus/icons-vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
 import ExecutionConsole from '../components/scenario/ExecutionConsole.vue'
+import RequestResponseDetail from '../components/testcase/RequestResponseDetail.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -140,6 +161,8 @@ const historyDialogVisible = ref(false)
 const selectedScenarioId = ref(null)
 const execConsole = ref(null)
 const consoleVisible = ref(false)
+const detailVisible = ref(false)
+const currentResult = ref(null)
 
 // Environment Selection
 const environments = ref([])
@@ -259,6 +282,11 @@ const handleStepUpdate = (event) => {
     if (event.type === 'scenario_complete') {
         // Optional: resultDialogVisible.value = true
     }
+}
+
+const viewResultDetail = (result) => {
+    currentResult.value = result
+    detailVisible.value = true
 }
 
 const showHistory = (row) => {

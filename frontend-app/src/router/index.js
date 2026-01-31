@@ -114,11 +114,6 @@ const router = createRouter({
                     component: () => import('../views/EnvironmentList.vue')
                 },
                 {
-                    path: '/config/variables',
-                    name: 'Variables',
-                    component: () => import('../views/EnvironmentList.vue') // Placeholder
-                },
-                {
                     path: '/config/step-templates',
                     name: 'StepTemplates',
                     component: () => import('../views/StepTemplateList.vue')

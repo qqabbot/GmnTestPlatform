@@ -10,15 +10,25 @@
         <result column="project_id" property="projectId"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
-        <!-- Association to Project if needed, typically lazy loaded or separate query -->
+        <association property="project" javaType="com.testing.automation.model.Project">
+            <id column="p_id" property="id"/>
+            <result column="p_name" property="projectName"/>
+        </association>
     </resultMap>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT * FROM test_scenarios ORDER BY id DESC
+        SELECT ts.*, p.id as p_id, p.project_name as p_name 
+        FROM test_scenarios ts
+        LEFT JOIN project p ON ts.project_id = p.id
+        ORDER BY ts.id DESC
     </select>
 
     <select id="findByProjectId" resultMap="BaseResultMap">
-        SELECT * FROM test_scenarios WHERE project_id = #{projectId} ORDER BY id DESC
+        SELECT ts.*, p.id as p_id, p.project_name as p_name 
+        FROM test_scenarios ts
+        LEFT JOIN project p ON ts.project_id = p.id
+        WHERE ts.project_id = #{projectId}
+        ORDER BY ts.id DESC
     </select>
 
     <select id="findById" resultMap="BaseResultMap">

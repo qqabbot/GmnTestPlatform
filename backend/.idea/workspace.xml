@@ -6,12 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="9e33e7c9-1072-49e9-868d-87e3e73c7837" name="Changes" comment="test api">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/Mapper/TestExecutionLogMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/Mapper/TestExecutionLogMapper.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/dto/TestResult.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/dto/TestResult.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/model/TestExecutionLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/model/TestExecutionLog.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/ScenarioExecutionEngine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/ScenarioExecutionEngine.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/TestCaseService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/TestCaseService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/invoker/CaseStepInvoker.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/service/invoker/CaseStepInvoker.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/testing/automation/util/CurlParser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/testing/automation/util/CurlParser.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend-app/src/stores/testCaseStore.js" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/stores/testCaseStore.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend-app/src/views/TestCaseEditor.vue" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend-app/src/views/TestCaseEditor.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,7 +47,7 @@
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "WebServerToolWindowFactoryState": "false",
-    "git-widget-placeholder": "feature/detailed-execution-logs",
+    "git-widget-placeholder": "fix/test-case-editor-unresponsive",
     "last_opened_file_path": "/Users/cccc/IdeaProjects/GmnTestPlatform/backend/pom.xml",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
