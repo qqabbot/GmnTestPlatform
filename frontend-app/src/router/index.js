@@ -9,11 +9,11 @@ const router = createRouter({
             component: Layout,
             redirect: '/dashboard',
             children: [
-                // Dashboard
+                // Dashboard (Phase 8.1: navigation page with env/address hierarchy)
                 {
                     path: '/dashboard',
                     name: 'Dashboard',
-                    component: () => import('../views/TestReport.vue') // Reuse report view as dashboard
+                    component: () => import('../views/DashboardNav.vue')
                 },
                 // API Testing Routes (changed from /api to /testing to avoid proxy conflict)
                 {
