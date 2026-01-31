@@ -197,6 +197,8 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- Avoid exit 137 (OOM kill): give JVM enough heap when running with Playwright -->
+                    <jvmArguments>-Xms256m -Xmx1536m -XX:+UseG1GC</jvmArguments>
                 </configuration>
             </plugin>
 

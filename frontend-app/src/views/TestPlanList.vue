@@ -1,37 +1,45 @@
 <template>
   <div class="test-scenario-list">
-    <div class="header">
-      <h2>Test Scenarios</h2>
-      <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon> New Scenario
-      </el-button>
+    <div class="toolbar">
+      <h2 class="toolbar-title">Test Scenarios</h2>
+      <div class="toolbar-actions">
+        <el-select
+          v-model="filterProjectId"
+          placeholder="Filter by Project"
+          clearable
+          @change="loadScenarios"
+          class="filter-select"
+          style="width: 200px"
+        >
+          <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
+        </el-select>
+        <el-button type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>
+          New Scenario
+        </el-button>
+      </div>
     </div>
 
-    <!-- Filter -->
-    <div class="filter-bar">
-      <el-select v-model="filterProjectId" placeholder="Filter by Project" clearable @change="loadScenarios">
-        <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
-      </el-select>
-    </div>
-
-    <!-- Scenario Table -->
     <el-table :data="scenarios" style="width: 100%" v-loading="loading">
       <el-table-column label="ID" width="80" prop="id" />
       <el-table-column prop="name" label="Scenario Name" min-width="200" />
       <el-table-column prop="project.projectName" label="Project" width="150" />
       <el-table-column label="Created At" width="180">
-          <template #default="scope">
-              {{ new Date(scope.row.createdAt).toLocaleString() }}
-          </template>
-      </el-table-column>
-      <el-table-column label="Actions" width="250" fixed="right">
         <template #default="scope">
-          <el-button type="success" size="small" @click="openRunDialog(scope.row)">
-            <el-icon><VideoPlay /></el-icon> Run
-          </el-button>
-          <el-button type="info" size="small" @click="showHistory(scope.row)">History</el-button>
-          <el-button type="primary" size="small" @click="editScenario(scope.row)">Edit</el-button>
-          <el-button type="danger" size="small" @click="deleteScenario(scope.row)">Delete</el-button>
+          {{ new Date(scope.row.createdAt).toLocaleString() }}
+        </template>
+      </el-table-column>
+      <el-table-column label="Actions" width="320" fixed="right" align="right">
+        <template #default="scope">
+          <div class="action-buttons">
+            <el-button type="success" size="small" @click="openRunDialog(scope.row)">
+              <el-icon><VideoPlay /></el-icon>
+              Run
+            </el-button>
+            <el-button type="primary" size="small" @click="editScenario(scope.row)">Edit</el-button>
+            <el-button type="info" size="small" @click="showHistory(scope.row)">History</el-button>
+            <el-button type="danger" size="small" @click="deleteScenario(scope.row)">Delete</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -263,13 +271,37 @@ const showHistory = (row) => {
 .test-scenario-list {
   padding: 20px;
 }
-.header {
+
+.toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 20px;
 }
-.filter-bar {
-  margin-bottom: 20px;
+
+.toolbar-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-select {
+  flex-shrink: 0;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 </style>
