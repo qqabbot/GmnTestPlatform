@@ -125,33 +125,15 @@ public class UiTestController {
         return uiTestService.getLogsByRecord(recordId);
     }
 
-    // Recording APIs
+    // Recording APIs — recording runs on the client via Local Agent only; server does not start a browser.
     @PostMapping("/cases/{caseId}/start-recording")
     public ResponseEntity<Map<String, Object>> startRecording(
             @PathVariable Long caseId,
-            @RequestBody Map<String, String> request) {
-        try {
-            String targetUrl = request.get("targetUrl");
-            if (targetUrl == null || targetUrl.trim().isEmpty()) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("success", false);
-                error.put("error", "targetUrl is required");
-                return ResponseEntity.badRequest().body(error);
-            }
-            
-            recordingService.startRecording(caseId, targetUrl);
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("message", "Recording started");
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Failed to start recording for case: {}", caseId, e);
-            Map<String, Object> error = new HashMap<>();
-            error.put("success", false);
-            error.put("error", e.getMessage());
-            return ResponseEntity.status(500).body(error);
-        }
+            @RequestBody(required = false) Map<String, Object> request) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", "Recording is only supported via the Playwright Local Agent on your computer. Install and start the agent, then use Recording from the UI.");
+        return ResponseEntity.badRequest().body(error);
     }
 
     @PostMapping("/cases/{caseId}/stop-recording")

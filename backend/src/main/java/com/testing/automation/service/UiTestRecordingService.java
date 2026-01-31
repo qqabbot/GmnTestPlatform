@@ -50,6 +50,10 @@ public class UiTestRecordingService {
      * @param targetUrl 目标URL
      */
     public void startRecording(Long caseId, String targetUrl) {
+        if (targetUrl == null || targetUrl.trim().isEmpty()) {
+            throw new IllegalArgumentException("targetUrl is required");
+        }
+        targetUrl = targetUrl.trim();
         if (recordingProcesses.containsKey(caseId)) {
             log.warn("Recording already started for case: {}", caseId);
             return;
@@ -70,18 +74,31 @@ public class UiTestRecordingService {
             recordedCode.put(caseId, new StringBuilder());
             
             // 启动 Playwright codegen 进程
+            // 确保浏览器可见（非 headless），并输出到 stdout
             ProcessBuilder pb = new ProcessBuilder(
                 "npx", "playwright", "codegen",
                 targetUrl,
                 "--target", "javascript",
-                "--output", "-" // 输出到 stdout
+                "--output", "-", // 输出到 stdout
+                "--headed" // 确保浏览器可见（非 headless）
             );
             
-            // 设置工作目录（可选）
+            // 设置工作目录
             pb.directory(new java.io.File(System.getProperty("user.dir")));
             
             // 合并错误流到标准输出
             pb.redirectErrorStream(true);
+            
+            // 设置环境变量，确保浏览器可以正常启动（仅传递非 null 值）
+            java.util.Map<String, String> env = pb.environment();
+            String display = System.getenv("DISPLAY");
+            if (display != null) {
+                env.put("DISPLAY", display);
+            }
+            String browsersPath = System.getenv("PLAYWRIGHT_BROWSERS_PATH");
+            if (browsersPath != null) {
+                env.put("PLAYWRIGHT_BROWSERS_PATH", browsersPath);
+            }
             
             Process process = pb.start();
             recordingProcesses.put(caseId, process);

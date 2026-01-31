@@ -8,7 +8,7 @@
         <span class="page-title">{{ isEditMode ? 'Edit UI Test Case' : 'New UI Test Case' }}</span>
       </div>
       <div class="header-actions">
-        <el-button type="success" @click="handleExecute" v-if="isEditMode">
+        <el-button type="success" @click="handleExecute" v-if="isEditMode || (executionMode === 'local' && uiCase.name && uiCase.moduleId)" :loading="localRunning" :disabled="localRunning">
           <el-icon><VideoPlay /></el-icon> Execute
         </el-button>
         <el-button type="primary" @click="handleSave">
@@ -204,7 +204,7 @@
       </template>
     </el-dialog>
 
-    <!-- Recording Dialog -->
+    <!-- Recording Dialog: recording runs on this computer via Local Agent only -->
     <el-dialog v-model="showRecordingDialog" title="Start Recording" width="500px">
       <el-form :model="recordingForm" label-position="top">
         <el-form-item label="Target URL" required>
@@ -214,7 +214,7 @@
             :disabled="isRecording"
           />
           <div style="margin-top: 5px; color: #909399; font-size: 12px;">
-            The browser will open this URL and record your interactions
+            The browser will open on this computer and record your interactions. The Local Agent must be running.
           </div>
         </el-form-item>
       </el-form>
@@ -223,6 +223,64 @@
         <el-button type="primary" @click="confirmStartRecording" :disabled="isRecording || !recordingForm.targetUrl">
           Start Recording
         </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Recording requires Local Agent: one-click copy install & start -->
+    <el-dialog v-model="showRecordingAgentRequiredDialog" title="Recording requires Local Agent" width="520px">
+      <p style="margin: 0 0 12px 0; color: #606266;">
+        Recording opens the browser on this computer. Install and start the Local Agent first, then click Recording again.
+      </p>
+      <div style="background: #f5f7fa; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; word-break: break-all;">
+        {{ recordingAgentInstallCommand }}
+      </div>
+      <template #footer>
+        <el-button @click="showRecordingAgentRequiredDialog = false">Cancel</el-button>
+        <el-button type="primary" @click="copyRecordingAgentCommand">
+          Copy install & start command
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Local Execution Script Dialog -->
+    <el-dialog v-model="showLocalScriptDialog" title="Local Execution Script" width="700px" destroy-on-close>
+      <p style="margin-bottom: 10px; color: #606266; font-size: 13px;">
+        Run this script locally with Node.js and Playwright. Save as <code>test.js</code> then run: <code>node test.js</code>
+      </p>
+      <el-input
+        v-model="localScriptContent"
+        type="textarea"
+        :rows="18"
+        readonly
+        style="font-family: 'Monaco', 'Menlo', monospace; font-size: 12px;"
+      />
+      <template #footer>
+        <el-button @click="showLocalScriptDialog = false">Close</el-button>
+        <el-button type="primary" @click="copyLocalScript">
+          Copy Script
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Local Run Result Dialog (when agent runs the test) -->
+    <el-dialog v-model="showLocalRunResultDialog" title="Local Execution Result" width="600px" destroy-on-close @close="closeLocalRunResult">
+      <div v-if="localRunResult">
+        <el-alert :type="localRunResult.success ? 'success' : 'error'" :title="localRunResult.success ? 'Execution completed' : 'Execution failed'" show-icon style="margin-bottom: 12px;" />
+        <div v-if="localRunResult.stdout" style="margin-bottom: 8px;">
+          <div style="font-weight: 500; margin-bottom: 4px;">Output</div>
+          <pre style="background: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 200px; overflow: auto;">{{ localRunResult.stdout }}</pre>
+        </div>
+        <div v-if="localRunResult.stderr">
+          <div style="font-weight: 500; margin-bottom: 4px;">Stderr</div>
+          <pre style="background: #fef0f0; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 150px; overflow: auto;">{{ localRunResult.stderr }}</pre>
+        </div>
+        <div v-if="!localRunResult.success && localRunResult.error">
+          <div style="font-weight: 500; margin-bottom: 4px;">Error</div>
+          <pre style="background: #fef0f0; padding: 8px; border-radius: 4px; font-size: 12px;">{{ localRunResult.error }}</pre>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="closeLocalRunResult">Close</el-button>
       </template>
     </el-dialog>
   </div>
@@ -247,6 +305,8 @@ const showImportDialog = ref(false)
 const importCode = ref('')
 const isRecording = ref(false)
 const showRecordingDialog = ref(false)
+const showRecordingAgentRequiredDialog = ref(false)
+const recordingAgentInstallCommand = 'cd playwright-local-agent && npm install && npx playwright install && npm start'
 const recordingForm = ref({
   targetUrl: ''
 })
@@ -484,14 +544,7 @@ const handleExecute = async () => {
             return
         }
 
-        // Check Playwright installation for local mode
-        if (executionMode.value === 'local') {
-            const installed = await checkAndInstallPlaywright()
-            if (!installed) {
-                ElMessage.warning('Playwright installation is required for local execution')
-                return
-            }
-        }
+        // Local mode only needs script generation; skip server Playwright check.
 
         // 1. Auto-save current state before execution to ensure backend gets latest settings (headless, etc.)
         const payload = {
@@ -528,48 +581,122 @@ const handleServerExecute = async () => {
     }
 }
 
+const LOCAL_AGENT_URL = 'http://127.0.0.1:9933'
+const showLocalScriptDialog = ref(false)
+const localScriptContent = ref('')
+const localRunning = ref(false)
+const localRunResult = ref(null)
+const showLocalRunResultDialog = ref(false)
+
+async function checkLocalAgent() {
+    try {
+        const r = await fetch(`${LOCAL_AGENT_URL}/health`, { method: 'GET', mode: 'cors' })
+        const data = await r.json().catch(() => ({}))
+        return r.ok && data?.ok === true
+    } catch (_) {
+        return false
+    }
+}
+
 const handleLocalExecute = async () => {
     try {
-        ElMessage.info('Generating local execution script...')
+        // 1. 先检查本地环境（agent 是否运行）
+        const agentAvailable = await checkLocalAgent()
         
-        // Get local script
-        const response = await uiTestApi.getLocalScript(uiCase.value.id)
-        if (!response.success || !response.script) {
-            ElMessage.error('Failed to generate local execution script')
+        if (!agentAvailable) {
+            // Agent 未运行，提示安装并给出安装脚本
+            const installScript = `cd playwright-local-agent
+npm install
+npm start`
+            
+            const installInstructions = `Local Playwright agent is not running.
+
+To enable local execution, please install and start the agent:
+
+${installScript}
+
+After starting the agent, click Execute again to run the test in your local browser.`
+            
+            await ElMessageBox.alert(
+                installInstructions,
+                'Local Agent Required',
+                {
+                    confirmButtonText: 'Copy Install Script',
+                    dangerouslyUseHTMLString: false
+                }
+            ).then(() => {
+                navigator.clipboard.writeText(installScript).then(() => {
+                    ElMessage.success('Install script copied to clipboard')
+                }).catch(() => {
+                    ElMessage.warning('Failed to copy. Please copy manually.')
+                })
+            }).catch(() => {
+                // User cancelled
+            })
             return
         }
         
-        // Show script in a simple dialog
-        ElMessageBox.prompt(
-            `Local execution script generated.\n\nTo run locally:\n1. Save the script below as test.js\n2. Run: node test.js\n\nScript:\n\n${response.script}`,
-            'Local Execution Script',
-            {
-                confirmButtonText: 'Copy Script',
-                cancelButtonText: 'Close',
-                inputType: 'textarea',
-                inputValue: response.script,
-                inputPlaceholder: 'Script will be copied to clipboard',
-                inputAttributes: {
-                    readonly: true,
-                    rows: 20
-                }
+        // 2. Agent 已运行，直接执行（与 Server Execution 一致）
+        ElMessage.info('Running in local browser...')
+        localRunning.value = true
+        
+        try {
+            // 生成脚本
+            const response = await uiTestApi.getLocalScript(uiCase.value.id)
+            const script = response?.script ?? response?.data?.script
+            const ok = response?.success ?? response?.data?.success
+            
+            if (!ok || !script) {
+                const err = response?.error ?? response?.data?.error
+                ElMessage.error(err || 'Failed to generate local execution script')
+                return
             }
-        ).then(() => {
-            // Copy to clipboard
-            navigator.clipboard.writeText(response.script).then(() => {
-                ElMessage.success('Script copied to clipboard')
-            }).catch(() => {
-                ElMessage.warning('Failed to copy to clipboard. Please copy manually.')
+            
+            // 发送到 agent 执行
+            const runRes = await fetch(`${LOCAL_AGENT_URL}/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script })
             })
-        }).catch(() => {
-            // User cancelled, do nothing
-        })
-    } catch (e) {
-        if (e !== 'cancel') {
-            console.error('Local execution error:', e)
-            ElMessage.error('Failed to generate local script: ' + (e.response?.data?.error || e.message || 'Server error'))
+            const result = await runRes.json().catch(() => ({}))
+            localRunResult.value = result
+            showLocalRunResultDialog.value = true
+            
+            if (result.success) {
+                ElMessage.success('Local execution completed successfully')
+            } else {
+                ElMessage.error(result.error || result.stderr || 'Local execution failed')
+            }
+        } catch (e) {
+            localRunResult.value = { success: false, error: e.message || 'Request failed' }
+            showLocalRunResultDialog.value = true
+            ElMessage.error('Local execution failed: ' + (e.message || 'Network error'))
+        } finally {
+            localRunning.value = false
         }
+    } catch (e) {
+        console.error('Local execution error:', e)
+        const msg = e.response?.data?.error ?? e.response?.data?.message ?? e.message ?? 'Server error'
+        ElMessage.error('Failed to execute locally: ' + msg)
+        localRunning.value = false
     }
+}
+
+const closeLocalRunResult = () => {
+    showLocalRunResultDialog.value = false
+    localRunResult.value = null
+}
+
+const copyLocalScript = () => {
+    const s = localScriptContent.value
+    if (!s) {
+        return
+    }
+    navigator.clipboard.writeText(s).then(() => {
+        ElMessage.success('Script copied to clipboard')
+    }).catch(() => {
+        ElMessage.warning('Failed to copy. Please select and copy manually.')
+    })
 }
 
 const checkAndInstallPlaywright = async () => {
@@ -731,58 +858,96 @@ const handleStartRecording = () => {
   }
 }
 
+const copyRecordingAgentCommand = () => {
+  navigator.clipboard.writeText(recordingAgentInstallCommand).then(() => {
+    ElMessage.success('Copied. Run in a terminal on this computer, then click Recording again.')
+  }).catch(() => {
+    ElMessage.warning('Failed to copy. Please copy the command above manually.')
+  })
+}
+
 const confirmStartRecording = async () => {
   if (!recordingForm.value.targetUrl || !recordingForm.value.targetUrl.trim()) {
     ElMessage.warning('Please enter a target URL')
     return
   }
 
+  const targetUrl = recordingForm.value.targetUrl.trim()
+
   try {
-    // Ensure case is saved first
     if (!uiCase.value.id) {
-      const payload = {
-        ...uiCase.value,
-        steps: steps.value
-      }
+      const payload = { ...uiCase.value, steps: steps.value }
       const savedCase = await uiTestApi.saveCase(payload)
       uiCase.value.id = savedCase.id
     }
 
-    // Start recording
-    await uiTestApi.startRecording(uiCase.value.id, {
-      targetUrl: recordingForm.value.targetUrl
+    const agentAvailable = await checkLocalAgent()
+
+    if (!agentAvailable) {
+      showRecordingDialog.value = false
+      showRecordingAgentRequiredDialog.value = true
+      return
+    }
+
+    ElMessage.info('Starting recording... Browser will open on this computer.')
+    const r = await fetch(`${LOCAL_AGENT_URL}/start-recording`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetUrl })
     })
-
-    // Connect WebSocket
-    connectRecordingWebSocket()
-
-    isRecording.value = true
-    showRecordingDialog.value = false
-    ElMessage.success('Recording started! Please interact with the browser window.')
+    const result = await r.json().catch(() => ({}))
+    if (result.success) {
+      isRecording.value = true
+      showRecordingDialog.value = false
+      recordingViaAgent.value = true
+      ElMessage.success('Recording started! A browser window has opened on this computer. Interact with it to record.')
+    } else {
+      const errMsg = result.error || 'Failed to start recording'
+      if (errMsg.length > 80 || /playwright install|browser|chromium/i.test(errMsg)) {
+        ElMessageBox.alert(errMsg, 'Recording failed', { type: 'error', confirmButtonText: 'OK' })
+      } else {
+        ElMessage.error(errMsg)
+      }
+    }
   } catch (e) {
     console.error('Start recording error:', e)
     ElMessage.error('Failed to start recording: ' + (e.response?.data?.error || e.message || 'Server error'))
   }
 }
 
+const recordingViaAgent = ref(false)
+
 const handleStopRecording = async () => {
   try {
-    await uiTestApi.stopRecording(uiCase.value.id)
-
-    // Close WebSocket
-    if (recordingWebSocket) {
-      recordingWebSocket.close()
-      recordingWebSocket = null
-    }
-
-    // Get recorded code and import
-    const response = await uiTestApi.getRecordingCode(uiCase.value.id)
-    if (response.code && response.code.trim()) {
-      importCode.value = response.code
-      handleImportCode()
-      ElMessage.success('Recording stopped and steps imported successfully')
+    if (recordingViaAgent.value) {
+      const r = await fetch(`${LOCAL_AGENT_URL}/stop-recording`, { method: 'POST' })
+      await r.json().catch(() => ({}))
+      const codeRes = await fetch(`${LOCAL_AGENT_URL}/recording-code`)
+      const codeData = await codeRes.json().catch(() => ({}))
+      const code = codeData.code || ''
+      recordingViaAgent.value = false
+      if (code && code.trim()) {
+        importCode.value = code
+        handleImportCode()
+        ElMessage.success('Recording stopped and steps imported successfully')
+      } else {
+        ElMessage.warning('Recording stopped, but no code was generated')
+      }
     } else {
-      ElMessage.warning('Recording stopped, but no code was generated')
+      await uiTestApi.stopRecording(uiCase.value.id)
+      if (recordingWebSocket) {
+        recordingWebSocket.close()
+        recordingWebSocket = null
+      }
+      const response = await uiTestApi.getRecordingCode(uiCase.value.id)
+      const code = response?.code ?? response?.data?.code ?? ''
+      if (code && code.trim()) {
+        importCode.value = code
+        handleImportCode()
+        ElMessage.success('Recording stopped and steps imported successfully')
+      } else {
+        ElMessage.warning('Recording stopped, but no code was generated')
+      }
     }
 
     isRecording.value = false
@@ -791,6 +956,7 @@ const handleStopRecording = async () => {
     console.error('Stop recording error:', e)
     ElMessage.error('Failed to stop recording: ' + (e.response?.data?.error || e.message || 'Server error'))
     isRecording.value = false
+    recordingViaAgent.value = false
   }
 }
 
@@ -867,33 +1033,20 @@ onBeforeRouteLeave((to, from, next) => {
   }
 })
 
-onMounted(() => {
-  loadData()
-  // Check Playwright installation status if in local mode
-  if (executionMode.value === 'local') {
-    checkAndInstallPlaywright().catch(() => {
-      // Silent fail on mount
-    })
-  }
-})
+onMounted(loadData)
 
 onBeforeUnmount(() => {
-  // Clean up WebSocket connection
   if (recordingWebSocket) {
     recordingWebSocket.close()
     recordingWebSocket = null
   }
-  
-  // Stop recording if active
-  if (isRecording.value && uiCase.value.id) {
-    uiTestApi.stopRecording(uiCase.value.id).catch(err => {
-      console.error('Failed to stop recording on unmount:', err)
-    })
+  if (isRecording.value) {
+    if (recordingViaAgent.value) {
+      fetch(`${LOCAL_AGENT_URL}/stop-recording`, { method: 'POST' }).catch(() => {})
+    } else if (uiCase.value.id) {
+      uiTestApi.stopRecording(uiCase.value.id).catch(() => {})
+    }
   }
-  
-  // Don't modify reactive state during unmount as it can cause
-  // Element Plus components (like menu) to access destroyed DOM elements
-  // Vue will automatically handle component cleanup
 })
 </script>
 
