@@ -19,7 +19,7 @@ public class AiService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${ai.gemini.api-key}")
+    @Value("${ai.gemini.api-key:}")
     private String apiKey;
 
     @Value("${ai.gemini.url}")

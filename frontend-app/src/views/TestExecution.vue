@@ -26,11 +26,7 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Environment">
-          <el-select v-model="config.envKey" placeholder="Select environment">
-            <el-option v-for="env in environments" :key="env.id" :label="env.envName" :value="env.envName" />
-          </el-select>
-        </el-form-item>
+
 
         <el-form-item>
           <el-button
@@ -110,18 +106,19 @@ import { projectApi } from '../api/project'
 import { testModuleApi } from '../api/testModule'
 import { environmentApi } from '../api/environment'
 import MonacoEditor from '../components/MonacoEditor.vue'
+import { useAppStore } from '../stores/appStore'
 
 const executing = ref(false)
 const config = ref({
   scope: 'project',
   projectId: null,
   moduleId: null,
-  envKey: ''
+  moduleId: null
 })
 const results = ref([])
 const projects = ref([])
 const modules = ref([])
-const environments = ref([])
+const appStore = useAppStore()
 
 const stats = computed(() => {
   return {
@@ -162,18 +159,14 @@ const loadModules = async () => {
   }
 }
 
-const loadEnvironments = async () => {
-  try {
-    environments.value = await environmentApi.getAll()
-    if (environments.value.length > 0) {
-      config.value.envKey = environments.value[0].envName
-    }
-  } catch (error) {
-    ElMessage.error('Failed to load environments')
-  }
-}
+
 
 const startExecution = async () => {
+  if (!appStore.selectedEnv) {
+      ElMessage.warning('Please select an environment from the top-right corner')
+      return
+  }
+
   if (config.value.scope === 'project' && !config.value.projectId) {
     ElMessage.warning('Please select a project')
     return
@@ -187,7 +180,7 @@ const startExecution = async () => {
   results.value = []
   
   try {
-    const params = { envKey: config.value.envKey }
+    const params = { envKey: appStore.selectedEnv }
     if (config.value.scope === 'project') {
       params.projectId = config.value.projectId
     } else {
@@ -209,7 +202,6 @@ const startExecution = async () => {
 onMounted(() => {
   loadProjects()
   loadModules()
-  loadEnvironments()
 })
 </script>
 

@@ -129,6 +129,24 @@
       <el-header class="header">
         <div class="header-content">
           <span class="title">{{ pageTitle }}</span>
+          <div class="header-right">
+            <el-select
+              v-model="appStore.selectedEnv"
+              placeholder="Select Environment"
+              style="width: 200px"
+              @change="appStore.setSelectedEnv"
+            >
+              <template #prefix>
+                <el-icon><Connection /></el-icon>
+              </template>
+              <el-option
+                v-for="env in appStore.environments"
+                :key="env.id"
+                :label="env.envName"
+                :value="env.envName"
+              />
+            </el-select>
+          </div>
         </div>
       </el-header>
 
@@ -140,11 +158,17 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAppStore } from '../stores/appStore'
 
 const route = useRoute()
 const router = useRouter()
+const appStore = useAppStore()
+
+onMounted(() => {
+  appStore.initialize()
+})
 
 // Handle menu selection to prevent DOM access errors during navigation
 const handleMenuSelect = (index) => {

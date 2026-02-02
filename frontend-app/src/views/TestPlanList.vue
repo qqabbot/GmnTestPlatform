@@ -99,30 +99,12 @@
       fixed="true"
       v-model:visible="consoleVisible"
       :scenario-id="selectedScenarioId"
-      :env-key="selectedRunEnv"
+      :env-key="appStore.selectedEnv"
       offset-left="200px"
       @step-update="handleStepUpdate"
     />
 
-    <!-- Run Environment Dialog -->
-    <el-dialog v-model="showRunEnvDialog" title="Select Execution Environment" width="400px">
-      <el-form label-position="top">
-        <el-form-item label="Environment" required>
-          <el-select v-model="selectedRunEnv" placeholder="Select environment" style="width: 100%">
-            <el-option
-              v-for="env in environments"
-              :key="env.id"
-              :label="env.envName"
-              :value="env.envName"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showRunEnvDialog = false">Cancel</el-button>
-        <el-button type="success" @click="confirmExecute" :disabled="!selectedRunEnv">Run</el-button>
-      </template>
-    </el-dialog>
+
 
     <!-- Execution History Dialog -->
     <execution-history-dialog 
@@ -138,7 +120,7 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { testScenarioApi } from '../api/testScenario'
 import { projectApi } from '../api/project'
-import { environmentApi } from '../api/environment'
+import { useAppStore } from '../stores/appStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, VideoPlay, Timer } from '@element-plus/icons-vue'
 import ExecutionHistoryDialog from '../components/scenario/ExecutionHistoryDialog.vue'
@@ -164,15 +146,12 @@ const consoleVisible = ref(false)
 const detailVisible = ref(false)
 const currentResult = ref(null)
 
-// Environment Selection
-const environments = ref([])
-const showRunEnvDialog = ref(false)
-const selectedRunEnv = ref('')
+
+const appStore = useAppStore()
 
 onMounted(async () => {
     loadProjects()
     loadScenarios()
-    loadEnvironments()
 })
 
 const loadProjects = async () => {
@@ -183,17 +162,7 @@ const loadProjects = async () => {
     }
 }
 
-const loadEnvironments = async () => {
-    try {
-        const data = await environmentApi.getAll()
-        environments.value = data
-        if (data.length > 0) {
-            selectedRunEnv.value = data[0].envName
-        }
-    } catch (e) {
-        console.error('Failed to load environments', e)
-    }
-}
+
 
 const loadScenarios = async () => {
     loading.value = true
@@ -249,12 +218,12 @@ const deleteScenario = async (row) => {
 }
 
 const openRunDialog = (row) => {
-    selectedScenarioId.value = row.id
-    showRunEnvDialog.value = true
-}
+    if (!appStore.selectedEnv) {
+        ElMessage.warning('Please select an environment from the top-right corner')
+        return
+    }
 
-const confirmExecute = () => {
-    showRunEnvDialog.value = false
+    selectedScenarioId.value = row.id
     consoleVisible.value = true
     nextTick(() => {
         if (execConsole.value) {
