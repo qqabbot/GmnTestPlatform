@@ -10,6 +10,7 @@
         <span class="page-title">{{ isEditMode ? 'Edit Test Case' : 'New Test Case' }}</span>
       </div>
       <div class="header-actions">
+        <!-- AI Mock Body Button Moved Here if desired, or keep in form -->
         <el-button type="info" @click="handleDryRun" :loading="store.loading">
           <el-icon><View /></el-icon> Dry Run
         </el-button>
@@ -155,45 +156,7 @@ vars.put("token", jsonPath(response, "$.data.token"))</pre>
       </div>
     </div>
 
-    <!-- Dry Run Dialog -->
-    <el-dialog v-model="showDryRunDialog" title="Dry Run" width="600px">
-      <el-form>
-        <el-form-item label="Environment">
-          <el-select v-model="dryRunEnv" placeholder="Select environment" style="width: 100%">
-            <el-option
-              v-for="env in environments"
-              :key="env.id"
-              :label="env.envName"
-              :value="env.envName"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showDryRunDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="executeDryRun" :loading="store.loading" :disabled="!dryRunEnv">Run</el-button>
-      </template>
-    </el-dialog>
 
-    <!-- Execute Dialog -->
-    <el-dialog v-model="showExecuteDialog" title="Execute Test Case" width="600px">
-      <el-form>
-        <el-form-item label="Environment">
-          <el-select v-model="executeEnv" placeholder="Select environment" style="width: 100%">
-            <el-option
-              v-for="env in environments"
-              :key="env.id"
-              :label="env.envName"
-              :value="env.envName"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showExecuteDialog = false">Cancel</el-button>
-        <el-button type="success" @click="executeRun" :loading="store.loading" :disabled="!executeEnv">Execute</el-button>
-      </template>
-    </el-dialog>
 
     <!-- cURL Import Dialog -->
     <el-dialog v-model="showCurlDialog" title="Import from cURL" width="700px">
@@ -436,9 +399,13 @@ import VariableInput from '../components/VariableInput.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onUnmounted } from 'vue'
 
+import { useAppStore } from '../stores/appStore'
+
 const route = useRoute()
 const router = useRouter()
 const store = useTestCaseStore()
+const appStore = useAppStore()
+// Forced update for HMR
 
 const isEditMode = computed(() => !!route.params.id)
 const selectedStepIndex = ref(-1)
@@ -447,11 +414,11 @@ const isMounted = ref(true)
 const isUnmounted = ref(false)
 const projects = ref([])
 const modules = ref([])
-const environments = ref([])
-const showDryRunDialog = ref(false)
-const showExecuteDialog = ref(false)
-const dryRunEnv = ref('')
-const executeEnv = ref('')
+// const environments = ref([]) // Removed
+// const showDryRunDialog = ref(false) // Removed
+// const showExecuteDialog = ref(false) // Removed
+// const dryRunEnv = ref('') // Removed
+// const executeEnv = ref('') // Removed
 const showResult = ref(false)
 const isDryRun = ref(false)
 
@@ -763,11 +730,9 @@ const stopWatch = watch(selectedStepIndex, (val) => {
 
 const loadData = async () => {
   try {
-    // Load initial data in parallel
-    const [projectsData, modulesData, environmentsData] = await Promise.all([
+    const [projectsData, modulesData] = await Promise.all([
       projectApi.getAll(),
-      testModuleApi.getAll(),
-      environmentApi.getAll()
+      testModuleApi.getAll()
     ])
     
     // Check if component is still mounted before updating state
@@ -775,13 +740,6 @@ const loadData = async () => {
     
     projects.value = projectsData
     modules.value = modulesData
-    environments.value = environmentsData
-    
-    // Set default environment if available
-    if (environments.value.length > 0) {
-      dryRunEnv.value = environments.value[0].envName
-      executeEnv.value = environments.value[0].envName
-    }
     
     if (isEditMode.value) {
       try {
@@ -907,11 +865,19 @@ const handleSave = async () => {
 }
 
 const handleDryRun = () => {
-  showDryRunDialog.value = true
+  if (!appStore.selectedEnv) {
+    ElMessage.warning('Please select an environment from the top-right corner')
+    return
+  }
+  executeDryRun()
 }
 
 const handleRun = () => {
-  showExecuteDialog.value = true
+  if (!appStore.selectedEnv) {
+      ElMessage.warning('Please select an environment from the top-right corner')
+      return
+  }
+  executeRun()
 }
 
 const executeDryRun = async () => {
@@ -920,10 +886,9 @@ const executeDryRun = async () => {
   store.loading = true
   try {
     await store.saveCase({ suppressLoading: true })
-    await store.runDryRun(dryRunEnv.value)
+    await store.runDryRun(appStore.selectedEnv)
     if (isUnmounted.value) return
     isDryRun.value = true
-    showDryRunDialog.value = false
     showResult.value = true
   } catch (error) {
     // Error already handled by store/message
@@ -934,10 +899,9 @@ const executeDryRun = async () => {
 
 const executeRun = async () => {
   if (isUnmounted.value) return
-  await store.executeCase(executeEnv.value)
+  await store.executeCase(appStore.selectedEnv)
   if (isUnmounted.value) return
   isDryRun.value = false
-  showExecuteDialog.value = false
   showResult.value = true
 }
 
@@ -955,13 +919,11 @@ onBeforeRouteLeave((to, from, next) => {
   }
   
   // Close all dialogs and drawers before navigation to prevent DOM access errors
-  const hasOpenDialogs = showDryRunDialog.value || showExecuteDialog.value || showCurlDialog.value || 
+  const hasOpenDialogs = showCurlDialog.value || 
       showAiDialog.value || showAiPreview.value || showLibraryDrawer.value || showResult.value
   
   if (hasOpenDialogs) {
     // Close all dialogs synchronously
-    showDryRunDialog.value = false
-    showExecuteDialog.value = false
     showCurlDialog.value = false
     showAiDialog.value = false
     showAiPreview.value = false

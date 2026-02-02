@@ -177,26 +177,7 @@
       </template>
     </el-dialog>
 
-    <!-- Run Environment Dialog -->
-    <el-dialog v-model="showRunEnvDialog" title="Select Execution Environment" width="400px">
-      <el-form label-position="top">
-        <el-form-item label="Environment" required>
-          <el-select v-model="selectedRunEnv" placeholder="Select environment" style="width: 100%">
-            <el-option
-              v-for="env in environments"
-              :key="env.id"
-              :label="env.envName"
-              :value="env.envName"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showRunEnvDialog = false">Cancel</el-button>
-        <el-button type="success" @click="confirmExecute" :disabled="!selectedRunEnv">Run</el-button>
-      </template>
-    </el-dialog>
-  </div>
+</div>
 </template>
 
 <script setup>
@@ -207,10 +188,11 @@ import { Plus, Search, Edit, Delete, VideoPlay } from '@element-plus/icons-vue'
 import { testCaseApi } from '../api/testCase'
 import { testModuleApi } from '../api/testModule'
 import { projectApi } from '../api/project'
-import { environmentApi } from '../api/environment'
+import { useAppStore } from '../stores/appStore'
 import ExecutionConsole from '@/components/scenario/ExecutionConsole.vue'
 
 const router = useRouter()
+const appStore = useAppStore()
 
 const loading = ref(false)
 const showDialog = ref(false)
@@ -227,11 +209,7 @@ const consoleVisible = ref(false)
 const consoleTitle = ref('')
 const streamUrl = ref('')
 
-// Environment Selection
-const environments = ref([])
-const showRunEnvDialog = ref(false)
-const selectedRunEnv = ref('')
-const executingRow = ref(null)
+
 
 // Pagination
 const currentPage = ref(1)
@@ -296,16 +274,7 @@ const loadProjects = async () => {
   }
 }
 
-const loadEnvironments = async () => {
-    try {
-        environments.value = await environmentApi.getAll()
-        if (environments.value.length > 0) {
-            selectedRunEnv.value = environments.value[0].envName
-        }
-    } catch (e) {
-        console.error('Failed to load environments', e)
-    }
-}
+
 
 const loadModules = async () => {
   try {
@@ -393,19 +362,15 @@ const deleteCase = async (id) => {
 }
 
 const handleExecute = (row) => {
-    executingRow.value = row
-    showRunEnvDialog.value = true
-}
+  if (!appStore.selectedEnv) {
+    ElMessage.warning('Please select an environment from the top-right corner')
+    return
+  }
 
-const confirmExecute = () => {
-  const row = executingRow.value
-  if (!row) return
-  
-  showRunEnvDialog.value = false
   consoleTitle.value = `Executing: ${row.caseName}`
   streamUrl.value = testCaseApi.getExecuteStreamUrl({
     caseId: row.id,
-    envKey: selectedRunEnv.value
+    envKey: appStore.selectedEnv
   })
   
   consoleVisible.value = true
@@ -441,7 +406,7 @@ onMounted(() => {
   loadProjects()
   loadModules()
   loadCases()
-  loadEnvironments()
+
 })
 </script>
 
