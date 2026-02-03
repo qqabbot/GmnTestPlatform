@@ -159,6 +159,19 @@ const findStepParentList = (list, targetStep) => {
     background-color: #f0f2f5;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+}
+.canvas-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.canvas-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 .canvas-header {
     background: #fff;

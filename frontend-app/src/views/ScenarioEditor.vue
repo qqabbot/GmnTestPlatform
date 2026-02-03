@@ -297,6 +297,7 @@ const updateStepStatus = (nodes, stepId, status) => {
     flex: 1;
     min-width: 400px;
     border-right: 1px solid #ebeef5;
+    overflow: hidden;
 }
 .right-pane {
     width: 450px;
