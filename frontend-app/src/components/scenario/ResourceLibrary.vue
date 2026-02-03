@@ -148,15 +148,10 @@ const cloneTestCase = (original) => {
     }
   }
   
-  // Include Pre-request Script (setupScript) if it exists
-  if (original.setupScript) {
-    initialOverrides.setupScript = original.setupScript
-  }
-  
-  // Include Global Assertion (assertionScript) if it exists
-  if (original.assertionScript) {
-    initialOverrides.assertionScript = original.assertionScript
-  }
+  // NOTE: We intentionally DO NOT copy setupScript and assertionScript here.
+  // Scripts should always be fetched from the original TestCase at execution time
+  // to ensure changes to the Case are immediately reflected in Scenario execution.
+  // Users can override scripts via the StepProperties panel if needed.
   
   return {
     isNew: true,

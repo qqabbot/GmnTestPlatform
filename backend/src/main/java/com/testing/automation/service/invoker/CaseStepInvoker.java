@@ -204,15 +204,21 @@ public class CaseStepInvoker implements StepInvoker {
                 });
             }
 
-            // Apply setupScript (Pre-request Script) override if present
-            if (overrides.has("setupScript") && !overrides.get("setupScript").isNull()) {
-                effectiveCase.setSetupScript(overrides.get("setupScript").asText());
-            }
-
-            // Apply assertionScript (Global Assertion) override if present
-            if (overrides.has("assertionScript") && !overrides.get("assertionScript").isNull()) {
-                effectiveCase.setAssertionScript(overrides.get("assertionScript").asText());
-            }
+            // NOTE: Script overrides are intentionally disabled.
+            // Scripts (setupScript, assertionScript) should always be fetched from
+            // the original TestCase to ensure Case modifications take effect immediately.
+            // If script override functionality is needed in the future, implement a
+            // separate "scriptOverrideEnabled" flag to distinguish between:
+            // 1. Legacy data that accidentally saved scripts (should be ignored)
+            // 2. Intentional user overrides (should be applied)
+            //
+            // if (overrides.has("setupScript") && !overrides.get("setupScript").isNull()) {
+            // effectiveCase.setSetupScript(overrides.get("setupScript").asText());
+            // }
+            // if (overrides.has("assertionScript") &&
+            // !overrides.get("assertionScript").isNull()) {
+            // effectiveCase.setAssertionScript(overrides.get("assertionScript").asText());
+            // }
 
             return effectiveCase;
         } catch (Exception e) {
