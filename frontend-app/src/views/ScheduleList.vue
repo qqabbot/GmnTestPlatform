@@ -56,11 +56,19 @@
            </el-select>
         </el-form-item>
         <el-form-item label="Cron Expression" required>
-           <el-input v-model="form.cronExpression" placeholder="e.g. 0 0/10 * * * ?" />
+           <div style="display: flex; gap: 10px; width: 100%">
+             <el-input v-model="form.cronExpression" placeholder="e.g. 0 0/10 * * * ?" />
+             <el-button type="info" @click="cronDialogVisible = true">
+               <el-icon><MagicStick /></el-icon> Generator
+             </el-button>
+           </div>
+           <!-- Nested Dialog for Cron -->
+           <el-dialog v-model="cronDialogVisible" title="Cron Generator" width="600px" append-to-body>
+             <cron-generator v-model="form.cronExpression" @confirm="cronDialogVisible = false" />
+           </el-dialog>
            <div class="help-text">
-             Examples: <br>
-             Every 30s: 0/30 * * * * ? <br>
-             Every day 9am: 0 0 9 * * ?
+             Standard: Seconds Minutes Hours Day Month Week <br>
+             Example: <code style="color: #409eff">0 0/10 * * * ?</code> (Every 10 min)
            </div>
         </el-form-item>
       </el-form>
@@ -78,12 +86,14 @@ import { scheduleApi } from '../api/schedule'
 import { testPlanApi } from '../api/testPlan'
 import { environmentApi } from '../api/environment'
 import { ElMessage, ElMessageBox } from 'element-plus'
-
+import { Plus, MagicStick } from '@element-plus/icons-vue'
+import CronGenerator from '../components/CronGenerator.vue'
 const loading = ref(false)
 const tasks = ref([])
 const plans = ref([])
 const environments = ref([])
 const dialogVisible = ref(false)
+const cronDialogVisible = ref(false)
 const isEdit = ref(false)
 
 const form = reactive({
