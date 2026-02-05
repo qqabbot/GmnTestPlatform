@@ -10,7 +10,8 @@ public class ScheduledTask {
     private Long id;
     private String name;
     private String cronExpression;
-    private Long planId;
+    private Long scenarioId;
+    private String scenarioName;
     private String envKey;
     private String status = "ACTIVE"; // ACTIVE or PAUSED
     private LocalDateTime lastRunTime;

@@ -1,9 +1,8 @@
 package com.testing.automation.job;
 
-import com.testing.automation.dto.TestResult;
 import com.testing.automation.Mapper.ScheduledTaskMapper;
 import com.testing.automation.model.ScheduledTask;
-import com.testing.automation.service.TestPlanService;
+import com.testing.automation.service.ScenarioExecutionEngine;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -12,43 +11,43 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 public class PlanExecutionJob implements Job {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanExecutionJob.class);
 
     @Autowired
-    private TestPlanService testPlanService;
+    private ScenarioExecutionEngine scenarioExecutionEngine;
 
     @Autowired
     private ScheduledTaskMapper taskMapper;
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        Long taskId = context.getJobDetail().getJobDataMap().getLong("taskId");
-        Long planId = context.getJobDetail().getJobDataMap().getLong("planId");
-        String envKey = context.getJobDetail().getJobDataMap().getString("envKey");
+        Long taskId = context.getMergedJobDataMap().getLong("taskId");
+        Long scenarioId = context.getMergedJobDataMap().getLong("scenarioId");
+        String envKey = context.getMergedJobDataMap().getString("envKey");
 
-        logger.info("Executing Scheduled Task ID: {}, Plan ID: {}", taskId, planId);
+        logger.info("Executing Scheduled Task ID: {}, Scenario ID: {}", taskId, scenarioId);
 
         try {
-            List<TestResult> results = testPlanService.executePlan(planId, envKey);
-            logger.info("Plan Execution Completed. Results: {}", results.size());
+            if (scenarioId != null && scenarioId > 0) {
+                logger.info("Running Scenario: {}", scenarioId);
+                scenarioExecutionEngine.executeScenario(scenarioId, envKey);
+            }
 
             // Update Last Run Time
             ScheduledTask task = taskMapper.findById(taskId);
             if (task != null) {
                 task.setLastRunTime(LocalDateTime.now());
-                task.setNextRunTime(LocalDateTime.ofInstant(context.getNextFireTime().toInstant(),
-                        java.time.ZoneId.systemDefault()));
+                if (context.getNextFireTime() != null) {
+                    task.setNextRunTime(LocalDateTime.ofInstant(context.getNextFireTime().toInstant(),
+                            java.time.ZoneId.systemDefault()));
+                }
                 taskMapper.update(task);
             }
-
-            // TODO: Send Notification (Email/DingTalk)
-
         } catch (Exception e) {
-            logger.error("Create Scheduled Task Execution Failed", e);
+            logger.error("Scheduled Task Execution Failed", e);
         }
     }
 }

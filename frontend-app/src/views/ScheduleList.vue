@@ -11,7 +11,15 @@
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="name" label="Task Name" />
       <el-table-column prop="cronExpression" label="Cron" width="150" />
-      <el-table-column prop="planId" label="Plan ID" width="100" />
+      <el-table-column label="Target Scenario" width="220">
+        <template #default="{ row }">
+          <el-tag v-if="row.scenarioId && row.scenarioName" type="info">
+            {{ row.scenarioId }}: {{ row.scenarioName }}
+          </el-tag>
+          <el-tag v-else-if="row.scenarioId" type="info">ID: {{ row.scenarioId }}</el-tag>
+          <el-tag v-else type="danger">MISSING</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="envKey" label="Env" width="100" />
       <el-table-column prop="status" label="Status" width="100">
         <template #default="{ row }">
@@ -45,9 +53,10 @@
         <el-form-item label="Task Name" required>
            <el-input v-model="form.name" />
         </el-form-item>
-        <el-form-item label="Test Plan" required>
-           <el-select v-model="form.planId" placeholder="Select Plan" style="width: 100%">
-             <el-option v-for="p in plans" :key="p.id" :label="p.name + ' (ID:' + p.id + ')'" :value="p.id" />
+
+        <el-form-item label="Test Scenario" required>
+           <el-select v-model="form.scenarioId" placeholder="Select Scenario" style="width: 100%" clearable>
+             <el-option v-for="s in scenarios" :key="s.id" :label="s.name + ' (ID:' + s.id + ')'" :value="s.id" />
            </el-select>
         </el-form-item>
         <el-form-item label="Environment" required>
@@ -83,14 +92,14 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { scheduleApi } from '../api/schedule'
-import { testPlanApi } from '../api/testPlan'
+import { testScenarioApi } from '../api/testScenario'
 import { environmentApi } from '../api/environment'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, MagicStick } from '@element-plus/icons-vue'
 import CronGenerator from '../components/CronGenerator.vue'
 const loading = ref(false)
 const tasks = ref([])
-const plans = ref([])
+const scenarios = ref([])
 const environments = ref([])
 const dialogVisible = ref(false)
 const cronDialogVisible = ref(false)
@@ -99,7 +108,7 @@ const isEdit = ref(false)
 const form = reactive({
     id: null,
     name: '',
-    planId: null,
+    scenarioId: null,
     envKey: null,
     cronExpression: ''
 })
@@ -108,7 +117,7 @@ onMounted(async () => {
     loadData()
     // Load options
     try {
-       plans.value = await testPlanApi.getAll()
+       scenarios.value = await testScenarioApi.getAll()
        environments.value = await environmentApi.getAll()
     } catch (e) {}
 })
@@ -135,7 +144,7 @@ const formatDate = (dateStr) => {
 
 const openCreateDialog = () => {
     isEdit.value = false
-    Object.assign(form, { id: null, name: '', planId: null, envKey: null, cronExpression: '' })
+    Object.assign(form, { id: null, name: '', scenarioId: null, envKey: null, cronExpression: '' })
     dialogVisible.value = true
 }
 
@@ -146,7 +155,7 @@ const openEditDialog = (row) => {
 }
 
 const saveTask = async () => {
-    if (!form.name || !form.planId || !form.envKey || !form.cronExpression) {
+    if (!form.name || !form.scenarioId || !form.envKey || !form.cronExpression) {
         ElMessage.warning('All fields are required')
         return
     }

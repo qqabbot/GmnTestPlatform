@@ -41,7 +41,7 @@ public class ScheduleService {
         if (task != null) {
             task.setName(taskDetails.getName());
             task.setCronExpression(taskDetails.getCronExpression());
-            task.setPlanId(taskDetails.getPlanId());
+            task.setScenarioId(taskDetails.getScenarioId());
             task.setEnvKey(taskDetails.getEnvKey());
             taskMapper.update(task);
             rescheduleJob(task);
@@ -79,7 +79,7 @@ public class ScheduleService {
             JobDetail jobDetail = JobBuilder.newJob(PlanExecutionJob.class)
                     .withIdentity("task_" + task.getId())
                     .usingJobData("taskId", task.getId())
-                    .usingJobData("planId", task.getPlanId())
+                    .usingJobData("scenarioId", task.getScenarioId() != null ? task.getScenarioId() : 0L)
                     .usingJobData("envKey", task.getEnvKey())
                     .build();
 
