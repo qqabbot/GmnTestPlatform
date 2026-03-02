@@ -14,7 +14,7 @@ if [ -f "${SCRIPT_DIR}/deploy.conf" ]; then
   . "${SCRIPT_DIR}/deploy.conf"
 fi
 
-PROJECT_ROOT="${PROJECT_ROOT:-/opt/GmnTestPlatform}"
+PROJECT_ROOT="${PROJECT_ROOT:-/home/carsome/QA/GmnTestPlatform}"
 GIT_BRANCH="${1:-${GIT_BRANCH:-main}}"
 
 if ! [ -d "${PROJECT_ROOT}/.git" ]; then

@@ -43,11 +43,11 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 ### 1. 上传代码到服务器
 
-将项目根目录（含 `docker-compose.yml`、`backend/`、`frontend-app/`）上传到服务器，例如 `/opt/GmnTestPlatform`。MySQL 使用当前配置（`docker-compose.yml` 中的环境变量），**不会**自动执行建表 SQL 脚本，请使用已有数据库或自行执行 `doc/sql/` 下的脚本初始化表结构。
+将项目根目录（含 `docker-compose.yml`、`backend/`、`frontend-app/`）上传到服务器，例如 `/home/carsome/QA/GmnTestPlatform`。MySQL 使用当前配置（`docker-compose.yml` 中的环境变量），**不会**自动执行建表 SQL 脚本，请使用已有数据库或自行执行 `doc/sql/` 下的脚本初始化表结构。
 
 ```bash
 # 在服务器上进入项目目录
-cd /opt/GmnTestPlatform
+cd /home/carsome/QA/GmnTestPlatform
 ```
 
 ### 2. 构建并启动
@@ -113,7 +113,7 @@ sudo docker compose build --no-cache && sudo docker compose up -d
 脚本位于项目根目录下的 `scripts/` 目录：
 
 ```bash
-cd /opt/GmnTestPlatform
+cd /home/carsome/QA/GmnTestPlatform
 chmod +x scripts/*.sh
 ```
 
@@ -125,20 +125,20 @@ chmod +x scripts/*.sh
 
 | 变量 | 含义 | 默认值 |
 |------|------|--------|
-| `PROJECT_ROOT` | 项目根目录（含 docker-compose.yml） | `/opt/GmnTestPlatform` |
+| `PROJECT_ROOT` | 项目根目录（含 docker-compose.yml） | `/home/carsome/QA/GmnTestPlatform` |
 | `GIT_BRANCH` | 拉取的分支 | `main` |
 | `GIT_PULL_ENABLED` | 是否在部署前执行 git pull | `true` |
 | `DOCKER_COMPOSE_CMD` | Docker Compose 命令 | `docker compose` |
 | `BUILD_NO_CACHE` | 是否使用 `build --no-cache` | `false` |
 
-也可通过环境变量覆盖，例如：`export PROJECT_ROOT=/home/app/GmnTestPlatform; ./scripts/deploy.sh`。
+也可通过环境变量覆盖，例如：`export PROJECT_ROOT=/home/carsome/QA/GmnTestPlatform; ./scripts/deploy.sh`。
 
 ### 一键拉代码并部署（推荐）
 
 每次代码更新后，在服务器上执行：
 
 ```bash
-cd /opt/GmnTestPlatform
+cd /home/carsome/QA/GmnTestPlatform
 ./scripts/deploy.sh
 ```
 
@@ -181,7 +181,7 @@ cd /opt/GmnTestPlatform
 2. 登录服务器，进入项目目录并执行部署脚本：
 
    ```bash
-   cd /opt/GmnTestPlatform
+   cd /home/carsome/QA/GmnTestPlatform
    ./scripts/deploy.sh
    ```
 
