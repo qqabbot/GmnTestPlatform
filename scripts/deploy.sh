@@ -19,7 +19,7 @@ fi
 
 # 可覆盖的变量
 PROJECT_ROOT="${PROJECT_ROOT:-/home/carsome/QA/GmnTestPlatform}"
-DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-docker compose}"
+DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-sudo docker compose}"
 BUILD_NO_CACHE="${BUILD_NO_CACHE:-false}"
 
 # 解析参数

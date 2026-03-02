@@ -15,7 +15,7 @@ if [ -f "${SCRIPT_DIR}/deploy.conf" ]; then
 fi
 
 PROJECT_ROOT="${PROJECT_ROOT:-/home/carsome/QA/GmnTestPlatform}"
-DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-docker compose}"
+DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-sudo docker compose}"
 
 if ! [ -d "${PROJECT_ROOT}" ]; then
   echo "错误: 项目目录不存在: ${PROJECT_ROOT}"

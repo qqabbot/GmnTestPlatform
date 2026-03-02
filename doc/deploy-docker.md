@@ -13,6 +13,40 @@
 - CentOS 7+（建议 CentOS 8 或 Rocky/AlmaLinux 8+）
 - 已安装 Docker 与 Docker Compose
 
+### Docker 权限（出现 permission denied 时）
+
+若执行脚本或 `docker` 命令时报错：
+
+```text
+permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock
+```
+
+可用以下任一方式解决：
+
+**方式一：脚本内使用 sudo（推荐，无需改系统）**
+
+在 `scripts/deploy.conf` 中已默认使用 `sudo docker compose`，直接执行即可：
+
+```bash
+./scripts/deploy.sh
+```
+
+若你已把默认改成了 `docker compose`，可改回 `sudo docker compose`，或执行时用环境变量：
+
+```bash
+DOCKER_COMPOSE_CMD="sudo docker compose" ./scripts/deploy.sh
+```
+
+**方式二：将当前用户加入 docker 组（一劳永逸）**
+
+```bash
+sudo usermod -aG docker "$USER"
+# 重新登录当前 shell 后生效，或执行：
+newgrp docker
+```
+
+生效后可将 `scripts/deploy.conf` 里的 `DOCKER_COMPOSE_CMD` 改为 `docker compose`，之后无需 sudo。
+
 ### 安装 Docker（若未安装）
 
 ```bash
