@@ -18,7 +18,7 @@ if [ -f "${SCRIPT_DIR}/deploy.conf" ]; then
 fi
 
 # 可覆盖的变量
-PROJECT_ROOT="${PROJECT_ROOT:-/opt/GmnTestPlatform}"
+PROJECT_ROOT="${PROJECT_ROOT:-/home/carsome/QA/GmnTestPlatform}"
 DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-docker compose}"
 BUILD_NO_CACHE="${BUILD_NO_CACHE:-false}"
 
