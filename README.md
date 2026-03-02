@@ -194,6 +194,36 @@ docker compose up -d
 
 代码更新后可在服务器执行 `./scripts/deploy.sh` 拉取并重新部署。详细步骤、部署脚本说明、使用已有 MySQL、常用命令与故障排查见 [Docker 部署指南](doc/deploy-docker.md)。
 
+### 查看部署日志
+
+在服务器项目根目录执行：
+
+```bash
+# 使用脚本：先看容器状态，加 -f 可持续输出日志
+./scripts/status.sh
+./scripts/status.sh -f
+
+# 或直接用 Docker Compose
+sudo docker compose logs          # 最近日志
+sudo docker compose logs -f       # 持续跟踪所有服务
+sudo docker compose logs -f backend   # 仅后端
+sudo docker compose logs -f frontend  # 仅前端
+sudo docker compose logs --tail=200 -f  # 最近 200 行并持续跟踪
+```
+
+### 后端启动报错：Failed to determine suitable jdbc url
+
+该错误表示**未配置数据源**，后端拿不到 `SPRING_DATASOURCE_URL`。当前使用外部 MySQL，需在**项目根目录**（与 `docker-compose.yml` 同目录）配置：
+
+1. **方式一**：创建 `.env` 文件（可复制 `.env.example` 后修改）：
+   ```bash
+   cp .env.example .env
+   # 编辑 .env，填写实际 MySQL 地址、用户名、密码
+   ```
+2. **方式二**：在执行 `docker compose up` 前导出环境变量，或在 Jenkins 中配置注入 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD`。
+
+确保 `SPRING_DATASOURCE_URL` 为完整 JDBC 地址，例如：`jdbc:mysql://<MySQL主机>:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true`。
+
 ---
 
 ## 📚 文档

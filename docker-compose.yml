@@ -8,10 +8,7 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      # 数据源由外部 MySQL 提供，通过 .env 或部署环境设置 SPRING_DATASOURCE_URL / USERNAME / PASSWORD
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-testplatform}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-testplatform}
+      # 数据源使用 application.yml 中已配置的 MySQL，此处不覆盖
     ports:
       - "4000:4000"
     volumes:

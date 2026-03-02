@@ -308,7 +308,8 @@ curl -s -X POST "http://localhost:4000/api/environments" \
 
 ## 故障排查
 
-- **后端启动报错 “Communications link failure”**：多为 MySQL 未就绪，等几秒后 `docker compose restart backend`，或确认 `SPRING_DATASOURCE_*` 与 MySQL 地址、库名、用户、密码一致。
+- **后端启动报错 “Failed to determine suitable jdbc url”**：未配置数据源。在项目根目录创建 `.env`（参考 `.env.example`）并设置 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD`；若用 Jenkins 部署，需在流水线或节点环境中注入上述变量，再执行 `docker compose up -d`。
+- **后端启动报错 “Communications link failure”**：数据源已配置但连不上 MySQL。确认 `SPRING_DATASOURCE_URL` 中的主机、端口、库名正确，用户名密码无误，且部署机可访问该 MySQL（网络/防火墙）。
 - **前端访问 502 / 无法打开**：确认 `frontend` 容器在运行，且 nginx 将 `/api` 代理到 `backend:4000`（见 `frontend-app/nginx.conf`）。
 - **端口占用**：修改 `docker-compose.yml` 中 `ports`（如 `"5001:80"`、`"4001:4000"`）避免与宿主机冲突。
 

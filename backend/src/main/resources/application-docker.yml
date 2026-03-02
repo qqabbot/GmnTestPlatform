@@ -1,16 +1,10 @@
-# Docker 部署时使用，通过环境变量覆盖数据源等配置
+# Docker 部署时使用，仅覆盖端口与日志级别；数据源沿用 application.yml 中的配置
 # 激活方式: SPRING_PROFILES_ACTIVE=docker
 
 server:
   port: 4000
 
-spring:
-  datasource:
-    # 使用外部 MySQL，必须通过环境变量 SPRING_DATASOURCE_URL 指定地址
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME:testplatform}
-    password: ${SPRING_DATASOURCE_PASSWORD:testplatform}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+# 不覆盖 spring.datasource，使用 application.yml 中已配置的 MySQL
 
 logging:
   level:
