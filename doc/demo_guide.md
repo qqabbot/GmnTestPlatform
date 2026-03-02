@@ -144,7 +144,7 @@ Body:
 
 ### 1. 查看演示用例
 
-1. 打开浏览器：http://localhost:8888
+1. 打开浏览器：http://localhost:5000
 2. 导航到：**API Testing → Test Cases**
 3. 找到并点击编辑：**用户完整流程测试**
 
@@ -226,7 +226,7 @@ ${T(Math).random()}
 
 ```bash
 # 为Step 2添加Token提取器
-curl -X POST http://localhost:7777/api/extractors \
+curl -X POST http://localhost:4000/api/extractors \
   -H "Content-Type: application/json" \
   -d '{
     "extractorName": "提取Token",

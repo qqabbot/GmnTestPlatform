@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # API Base URL
-BASE_URL="http://localhost:7777/api"
+BASE_URL="http://localhost:4000/api"
 
 echo "=== 插入测试数据 ==="
 

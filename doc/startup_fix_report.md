@@ -21,7 +21,7 @@ SyntaxError: Cannot use import statement outside a module
 ### 2. 后端配置正常 ✅
 - `application.yml` 配置文件存在且配置正确
 - 数据库连接配置完整
-- 端口配置为 7777
+- 端口配置为 4000
 
 ## 解决方案
 
@@ -35,7 +35,7 @@ SyntaxError: Cannot use import statement outside a module
    - 命令: `npm install --registry=https://registry.npmmirror.com`
 
 3. **验证启动**
-   - ✅ 前端成功启动在 http://localhost:8888
+   - ✅ 前端成功启动在 http://localhost:5000
 
 ### 创建启动脚本
 为方便后续使用，创建了启动脚本：
@@ -98,12 +98,12 @@ mvn spring-boot:run
 ```
 
 ## 访问地址
-- **前端**: http://localhost:8888
-- **后端**: http://localhost:7777
+- **前端**: http://localhost:5000
+- **后端**: http://localhost:4000
 
 ## 测试结果
 - ✅ 前端启动成功
-- ✅ 端口 8888 正常监听
+- ✅ 端口 5000 正常监听
 - ✅ Vite 开发服务器运行正常
 - ⏸️ 后端待启动测试
 

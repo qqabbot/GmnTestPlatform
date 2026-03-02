@@ -1,6 +1,6 @@
 # API 操作指南
 
-Base URL: `http://localhost:7777/api`
+Base URL: `http://localhost:4000/api`
 
 ## 目录
 
@@ -594,7 +594,7 @@ Base URL: `http://localhost:7777/api`
 
 ```bash
 # 1. 创建测试用例
-curl -X POST http://localhost:7777/api/cases \
+curl -X POST http://localhost:4000/api/cases \
   -H "Content-Type: application/json" \
   -d '{
     "caseName": "用户登录",
@@ -606,14 +606,14 @@ curl -X POST http://localhost:7777/api/cases \
   }'
 
 # 2. 执行测试用例
-curl -X POST "http://localhost:7777/api/cases/execute?envKey=dev&moduleId=1"
+curl -X POST "http://localhost:4000/api/cases/execute?envKey=dev&moduleId=1"
 ```
 
 ### 示例 2: 创建测试计划并执行
 
 ```bash
 # 1. 创建测试计划
-curl -X POST http://localhost:7777/api/test-plans \
+curl -X POST http://localhost:4000/api/test-plans \
   -H "Content-Type: application/json" \
   -d '{
     "name": "用户流程测试",
@@ -625,14 +625,14 @@ curl -X POST http://localhost:7777/api/test-plans \
   }'
 
 # 2. 执行测试计划
-curl -X POST "http://localhost:7777/api/test-plans/1/execute?envKey=dev"
+curl -X POST "http://localhost:4000/api/test-plans/1/execute?envKey=dev"
 ```
 
 ### 示例 3: 创建测试场景并执行
 
 ```bash
 # 1. 创建测试场景
-curl -X POST http://localhost:7777/api/scenarios \
+curl -X POST http://localhost:4000/api/scenarios \
   -H "Content-Type: application/json" \
   -d '{
     "name": "订单流程",
@@ -640,7 +640,7 @@ curl -X POST http://localhost:7777/api/scenarios \
   }'
 
 # 2. 添加步骤
-curl -X POST http://localhost:7777/api/scenarios/1/steps \
+curl -X POST http://localhost:4000/api/scenarios/1/steps \
   -H "Content-Type: application/json" \
   -d '{
     "type": "CASE",
@@ -650,7 +650,7 @@ curl -X POST http://localhost:7777/api/scenarios/1/steps \
   }'
 
 # 3. 执行场景
-curl -X POST "http://localhost:7777/api/scenarios/1/execute?envKey=dev"
+curl -X POST "http://localhost:4000/api/scenarios/1/execute?envKey=dev"
 ```
 
 ### 示例 4: 使用变量传递

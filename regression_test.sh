@@ -5,7 +5,7 @@ echo "Full Regression Test Suite for Steps Save"
 echo "============================================"
 echo ""
 
-API_BASE="http://localhost:7777/api"
+API_BASE="http://localhost:4000/api"
 PASS=0
 FAIL=0
 

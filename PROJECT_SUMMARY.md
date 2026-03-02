@@ -74,7 +74,7 @@ npm run dev
 
 ### 访问应用
 - 前端: http://localhost:8080
-- 后端: http://localhost:7777
+- 后端: http://localhost:4000
 
 ## 后续优化方向
 

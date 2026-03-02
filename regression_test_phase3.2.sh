@@ -7,7 +7,7 @@ echo "=== Phase 3.2 Regression Test ==="
 echo "Note: This script retains all created data for manual inspection."
 echo ""
 
-BASE_URL="http://localhost:7777/api"
+BASE_URL="http://localhost:4000/api"
 TIMESTAMP=$(date +%s)
 sleep 2
 

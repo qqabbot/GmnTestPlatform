@@ -2,7 +2,7 @@
 
 echo "创建一个完整的测试用例（带Steps）..."
 
-curl -s -X POST http://localhost:7777/api/cases \
+curl -s -X POST http://localhost:4000/api/cases \
   -H "Content-Type: application/json" \
   -d '{
     "caseName": "完整用例测试",
@@ -26,4 +26,4 @@ curl -s -X POST http://localhost:7777/api/cases \
   }' | python3 -m json.tool
 
 echo -e "\n查看所有测试用例："
-curl -s http://localhost:7777/api/cases | python3 -m json.tool
+curl -s http://localhost:4000/api/cases | python3 -m json.tool

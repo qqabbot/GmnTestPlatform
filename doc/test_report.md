@@ -11,7 +11,7 @@
 
 ### 后端服务
 - **状态**: ⚠️ 未运行
-- **预期端口**: 7777
+- **预期端口**: 4000
 - **建议**: 需要启动后端服务才能执行完整测试
 
 ### 前端服务
@@ -88,10 +88,10 @@ npm run dev
 ### 执行 API 测试
 ```bash
 # 1. 测试获取用例列表
-curl http://localhost:7777/api/cases
+curl http://localhost:4000/api/cases
 
 # 2. 测试创建用例
-curl -X POST http://localhost:7777/api/cases \
+curl -X POST http://localhost:4000/api/cases \
   -H "Content-Type: application/json" \
   -d '{
     "caseName": "测试用例1",
@@ -102,7 +102,7 @@ curl -X POST http://localhost:7777/api/cases \
   }'
 
 # 3. 测试执行
-curl -X POST "http://localhost:7777/api/cases/execute?envKey=dev"
+curl -X POST "http://localhost:4000/api/cases/execute?envKey=dev"
 ```
 
 ### 执行前端测试
@@ -165,7 +165,7 @@ cd frontend-app && npm run dev &
 sleep 10
 
 # 执行测试
-curl http://localhost:7777/api/cases
+curl http://localhost:4000/api/cases
 curl http://localhost:8080
 ```
 

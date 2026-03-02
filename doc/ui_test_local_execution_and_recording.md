@@ -529,7 +529,7 @@ const handleStopRecording = async () => {
 
 const connectRecordingWebSocket = () => {
   // 建立 WebSocket 连接
-  const ws = new WebSocket(`ws://localhost:7777/api/ui-tests/recording/${uiCase.value.id}`);
+  const ws = new WebSocket(`ws://localhost:4000/api/ui-tests/recording/${uiCase.value.id}`);
   
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);

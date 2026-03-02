@@ -50,7 +50,7 @@ frontend/
 - ✅ Vue Router 路由管理
 - ✅ Pinia 状态管理（已配置）
 - ✅ Axios HTTP 客户端
-- ✅ Vite 代理配置（自动转发 /api 到后端 7777 端口）
+- ✅ Vite 代理配置（自动转发 /api 到后端 4000 端口）
 
 ## 🚀 使用方法
 
@@ -60,7 +60,7 @@ frontend/
    ```bash
    # 在项目根目录
    mvn spring-boot:run
-   # 后端运行在 http://localhost:7777
+   # 后端运行在 http://localhost:4000
    ```
 
 2. **启动前端开发服务器**
@@ -108,7 +108,7 @@ server: {
   port: 8080,
   proxy: {
     '/api': {
-      target: 'http://localhost:7777',
+      target: 'http://localhost:4000',
       changeOrigin: true
     }
   }
@@ -117,7 +117,7 @@ server: {
 
 这意味着：
 - 前端请求 `http://localhost:8080/api/cases`
-- 自动转发到 `http://localhost:7777/api/cases`
+- 自动转发到 `http://localhost:4000/api/cases`
 
 ### API 集成
 所有 API 调用都在 `src/api/testCase.js` 中定义：
@@ -164,7 +164,7 @@ testCaseApi.execute(moduleId, envKey)
 ## 🐛 故障排查
 
 ### 前端无法连接后端
-- 检查后端是否在 7777 端口运行
+- 检查后端是否在 4000 端口运行
 - 检查浏览器控制台是否有 CORS 错误
 - 确认 Vite 代理配置正确
 

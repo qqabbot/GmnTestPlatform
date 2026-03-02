@@ -3,7 +3,7 @@
 # 演示如何提取变量和串联多接口测试用例
 # 场景：用户注册 → 登录 → 获取用户信息 → 更新用户信息
 
-API_BASE="http://localhost:7777/api"
+API_BASE="http://localhost:4000/api"
 
 echo "======================================"
 echo "创建演示数据：变量提取与接口串联"
@@ -168,7 +168,7 @@ echo "  4. 变量传递: Step 3和4 使用提取的 auth_token"
 echo "  5. 4步骤串联: 注册 → 登录 → 查询 → 更新"
 echo ""
 echo "📖 使用说明："
-echo "  1. 打开浏览器访问: http://localhost:8888"
+echo "  1. 打开浏览器访问: http://localhost:5000"
 echo "  2. 导航到: API Testing → Test Cases"
 echo "  3. 编辑 '用户完整流程测试'"
 echo "  4. 查看4个Step的配置（变量使用示例）"

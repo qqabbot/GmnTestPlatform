@@ -8,7 +8,7 @@ Run the application using Maven:
 ```bash
 mvn spring-boot:run
 ```
-The application will start on port `7777`.
+The application will start on port `4000`.
 
 ### Debug Mode
 To start the application in debug mode (listening on port `5005`):
@@ -25,7 +25,7 @@ Press `Ctrl + C` in the terminal window where the application is running.
 ### If running in background or port is occupied
 Find the process ID (PID) occupying the port:
 ```bash
-lsof -i :7777
+lsof -i :4000
 ```
 Then kill the process:
 ```bash

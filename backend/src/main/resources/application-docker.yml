@@ -1,0 +1,20 @@
+# Docker 部署时使用，通过环境变量覆盖数据源等配置
+# 激活方式: SPRING_PROFILES_ACTIVE=docker
+
+server:
+  port: 4000
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:testplatform}
+    password: ${SPRING_DATASOURCE_PASSWORD:testplatform}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+logging:
+  level:
+    root: INFO
+    com.testing.automation: INFO
+    com.zaxxer.hikari: WARN
+    com.mysql: WARN
+    org.springframework.jdbc: WARN

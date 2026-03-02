@@ -1,0 +1,62 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: gmn-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: TestPlatform
+      MYSQL_USER: testplatform
+      MYSQL_PASSWORD: testplatform
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: gmn-backend:latest
+    container_name: gmn-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: testplatform
+      SPRING_DATASOURCE_PASSWORD: testplatform
+    ports:
+      - "4000:4000"
+    volumes:
+      - backend_data:/app/data
+      - backend_videos:/app/videos
+      - backend_screenshots:/app/screenshots
+      - backend_allure:/app/allure-results
+
+  frontend:
+    build:
+      context: ./frontend-app
+      dockerfile: Dockerfile
+    image: gmn-frontend:latest
+    container_name: gmn-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5000:80"
+
+volumes:
+  mysql_data:
+  backend_data:
+  backend_videos:
+  backend_screenshots:
+  backend_allure:

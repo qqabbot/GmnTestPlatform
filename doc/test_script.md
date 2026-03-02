@@ -4,12 +4,12 @@
 
 ### 1. 测试获取所有用例
 ```bash
-curl -X GET http://localhost:7777/api/cases
+curl -X GET http://localhost:4000/api/cases
 ```
 
 ### 2. 测试创建用例
 ```bash
-curl -X POST http://localhost:7777/api/cases \
+curl -X POST http://localhost:4000/api/cases \
   -H "Content-Type: application/json" \
   -d '{
     "module": {"id": 1},
@@ -24,7 +24,7 @@ curl -X POST http://localhost:7777/api/cases \
 
 ### 3. 测试更新用例
 ```bash
-curl -X PUT http://localhost:7777/api/cases/1 \
+curl -X PUT http://localhost:4000/api/cases/1 \
   -H "Content-Type: application/json" \
   -d '{
     "id": 1,
@@ -40,12 +40,12 @@ curl -X PUT http://localhost:7777/api/cases/1 \
 
 ### 4. 测试执行用例
 ```bash
-curl -X POST "http://localhost:7777/api/cases/execute?envKey=dev"
+curl -X POST "http://localhost:4000/api/cases/execute?envKey=dev"
 ```
 
 ### 5. 测试删除用例
 ```bash
-curl -X DELETE http://localhost:7777/api/cases/1
+curl -X DELETE http://localhost:4000/api/cases/1
 ```
 
 ## 前端功能测试
@@ -72,7 +72,7 @@ echo ""
 
 # 测试后端健康检查
 echo "1. 测试后端连接..."
-if curl -s http://localhost:7777/api/cases > /dev/null; then
+if curl -s http://localhost:4000/api/cases > /dev/null; then
     echo "✅ 后端连接成功"
 else
     echo "❌ 后端连接失败"
@@ -82,7 +82,7 @@ fi
 # 测试创建用例
 echo ""
 echo "2. 测试创建用例..."
-RESPONSE=$(curl -s -X POST http://localhost:7777/api/cases \
+RESPONSE=$(curl -s -X POST http://localhost:4000/api/cases \
   -H "Content-Type: application/json" \
   -d '{
     "module": {"id": 1},
@@ -103,7 +103,7 @@ fi
 # 测试执行
 echo ""
 echo "3. 测试执行用例..."
-EXEC_RESPONSE=$(curl -s -X POST "http://localhost:7777/api/cases/execute?envKey=dev")
+EXEC_RESPONSE=$(curl -s -X POST "http://localhost:4000/api/cases/execute?envKey=dev")
 
 if [ $? -eq 0 ]; then
     echo "✅ 执行测试成功"

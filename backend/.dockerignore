@@ -1,0 +1,24 @@
+# Build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE and OS
+.idea/
+*.iml
+.DS_Store
+*.log
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Local config and data
+backend.log
+data/
+videos/
+screenshots/
+allure-results/
+.gemini/

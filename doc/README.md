@@ -82,7 +82,7 @@ GmnTestPlatform/
 ```bash
 cd backend
 
-# 运行在 http://localhost:7777
+# 运行在 http://localhost:4000
 ```
 
 ### 前端启动
@@ -90,7 +90,7 @@ cd backend
 cd frontend-app
 npm install
 npm run dev
-# 运行在 http://localhost:8888
+# 运行在 http://localhost:5000
 ```
 
 ### 数据库配置

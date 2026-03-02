@@ -99,10 +99,10 @@
 1. **API 接口测试**
    ```bash
    # 测试获取所有用例
-   curl http://localhost:7777/api/cases
+   curl http://localhost:4000/api/cases
    
    # 测试创建用例
-   curl -X POST http://localhost:7777/api/cases \
+   curl -X POST http://localhost:4000/api/cases \
      -H "Content-Type: application/json" \
      -d '{
        "caseName": "Test Case 1",
@@ -112,7 +112,7 @@
      }'
    
    # 测试执行
-   curl -X POST "http://localhost:7777/api/cases/execute?envKey=dev"
+   curl -X POST "http://localhost:4000/api/cases/execute?envKey=dev"
    ```
 
 2. **数据库验证**
@@ -124,7 +124,7 @@
 
 #### 前端测试
 1. **页面访问测试**
-   - 访问 http://localhost:8888
+   - 访问 http://localhost:5000
    - 验证页面正常加载
    - 验证路由切换
 
@@ -154,8 +154,8 @@
 ## 测试环境
 
 ### 开发环境
-- 后端: http://localhost:7777
-- 前端: http://localhost:8888
+- 后端: http://localhost:4000
+- 前端: http://localhost:5000
 - 数据库: MySQL 10.48.0.13:3306
 
 ### 测试数据

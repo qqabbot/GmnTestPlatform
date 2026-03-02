@@ -140,7 +140,7 @@ frontend/
 ```
 
 ### API 集成
-后端 API 基础路径：`http://localhost:7777/api`
+后端 API 基础路径：`http://localhost:4000/api`
 
 主要接口：
 - `GET /api/cases` - 获取用例列表

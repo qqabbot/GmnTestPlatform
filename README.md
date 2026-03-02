@@ -20,7 +20,7 @@ GmnTestPlatform/
 cd backend
 mvn spring-boot:run
 ```
-👉 后端运行在 **http://localhost:7777**
+👉 后端运行在 **http://localhost:4000**
 
 ### 启动前端
 ```bash
@@ -28,7 +28,7 @@ cd frontend-app
 npm install  # 首次运行需要安装依赖
 npm run dev
 ```
-👉 前端运行在 **http://localhost:8888**
+👉 前端运行在 **http://localhost:5000**
 
 ### 插入测试数据（可选）
 ```bash
@@ -180,9 +180,26 @@ Environment: dev
 
 ---
 
+## 🐳 Docker 部署（CentOS 服务器）
+
+在项目根目录执行：
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
+- 前端访问：**http://&lt;服务器IP&gt;:5000**
+- 后端 API：**http://&lt;服务器IP&gt;:4000**
+
+代码更新后可在服务器执行 `./scripts/deploy.sh` 拉取并重新部署。详细步骤、部署脚本说明、使用已有 MySQL、常用命令与故障排查见 [Docker 部署指南](doc/deploy-docker.md)。
+
+---
+
 ## 📚 文档
 
 - [API 端点文档](doc/api_endpoints.md)
+- [Docker 部署指南](doc/deploy-docker.md)（含 Jenkins 流水线说明）
 - [后端任务清单](doc/task/backend_tasks.md)
 - [前端任务清单](doc/task/frontend_tasks.md)
 - [Phase 3.1 功能清单](doc/task/phase3.1_tasks.md)
@@ -235,7 +252,7 @@ Module Variables (模块级)
 
 ## 📊 监控与指标
 
-访问 **http://localhost:7777/actuator/prometheus** 查看实时指标：
+访问 **http://localhost:4000/actuator/prometheus** 查看实时指标：
 - JVM 内存、GC、线程
 - HTTP 请求耗时
 - Circuit Breaker 状态

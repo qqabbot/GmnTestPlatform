@@ -113,7 +113,7 @@ const loading = ref(false)
 const record = ref(null)
 const logs = ref([])
 
-// No longer need hardcoded localhost:7777, using relative paths via Vite proxy
+// No longer need hardcoded localhost:4000, using relative paths via Vite proxy
 
 const videoUrl = computed(() => {
   if (!record.value || !record.value.videoPath) return ''
