@@ -6,7 +6,8 @@ server:
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    # 使用外部 MySQL，必须通过环境变量 SPRING_DATASOURCE_URL 指定地址
+    url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME:testplatform}
     password: ${SPRING_DATASOURCE_PASSWORD:testplatform}
     driver-class-name: com.mysql.cj.jdbc.Driver

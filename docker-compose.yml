@@ -1,24 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: gmn-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: TestPlatform
-      MYSQL_USER: testplatform
-      MYSQL_PASSWORD: testplatform
-      MYSQL_ROOT_PASSWORD: rootpass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
   backend:
     build:
       context: ./backend
@@ -26,14 +6,12 @@ services:
     image: gmn-backend:latest
     container_name: gmn-backend
     restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: testplatform
-      SPRING_DATASOURCE_PASSWORD: testplatform
+      # 数据源由外部 MySQL 提供，通过 .env 或部署环境设置 SPRING_DATASOURCE_URL / USERNAME / PASSWORD
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-testplatform}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-testplatform}
     ports:
       - "4000:4000"
     volumes:
@@ -55,7 +33,6 @@ services:
       - "5000:80"
 
 volumes:
-  mysql_data:
   backend_data:
   backend_videos:
   backend_screenshots:

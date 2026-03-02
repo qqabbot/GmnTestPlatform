@@ -6,7 +6,7 @@
 
 - **前端**：宿主机端口 **5000**（容器内 nginx 仍为 80）
 - **后端**：宿主机端口 **4000**
-- **MySQL**：使用 `docker-compose.yml` 中当前配置（库 `TestPlatform`，用户 `testplatform`），**不会**在启动时自动执行建表 SQL；请使用已有数据库或自行按 `doc/sql/` 下脚本初始化表结构。
+- **MySQL**：不包含在 compose 中，使用**外部已有 MySQL**。需在项目根目录配置 `.env`（或导出环境变量）提供 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD`，指向你的 MySQL 地址。
 
 ## 前置条件
 
@@ -77,17 +77,29 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 ### 1. 上传代码到服务器
 
-将项目根目录（含 `docker-compose.yml`、`backend/`、`frontend-app/`）上传到服务器，例如 `/home/carsome/QA/GmnTestPlatform`。MySQL 使用当前配置（`docker-compose.yml` 中的环境变量），**不会**自动执行建表 SQL 脚本，请使用已有数据库或自行执行 `doc/sql/` 下的脚本初始化表结构。
+将项目根目录（含 `docker-compose.yml`、`backend/`、`frontend-app/`）上传到服务器。在项目根目录创建 `.env` 文件（可参考 `.env.example`），配置 `SPRING_DATASOURCE_URL` 等指向你的外部 MySQL。
 
 ```bash
 # 在服务器上进入项目目录
 cd /home/carsome/QA/GmnTestPlatform
 ```
 
-### 2. 构建并启动
+### 2. 配置外部 MySQL
+
+在项目根目录创建 `.env`（或导出环境变量），例如：
 
 ```bash
-# 构建镜像并启动所有服务（首次或代码更新后）
+# 复制示例后编辑
+cp .env.example .env
+# 编辑 .env，填写实际 MySQL 地址、用户名、密码
+```
+
+必填：`SPRING_DATASOURCE_URL=jdbc:mysql://<MySQL主机>:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true`
+
+### 3. 构建并启动
+
+```bash
+# 构建镜像并启动 backend + frontend（首次或代码更新后）
 sudo docker compose build --no-cache
 sudo docker compose up -d
 
@@ -96,7 +108,7 @@ sudo docker-compose build --no-cache
 sudo docker-compose up -d
 ```
 
-### 3. 查看状态与日志
+### 4. 查看状态与日志
 
 ```bash
 # 查看容器状态
@@ -109,16 +121,12 @@ sudo docker compose logs -f
 sudo docker compose logs -f backend
 # 仅前端
 sudo docker compose logs -f frontend
-# 仅 MySQL
-sudo docker compose logs -f mysql
 ```
 
-### 4. 访问应用
+### 5. 访问应用
 
 - **前端（浏览器访问）**：`http://<服务器IP>:5000`
 - **后端 API**：`http://<服务器IP>:4000/api`（如需直接调 API）
-- **MySQL**：`<服务器IP>:3306`，数据库 `TestPlatform`，用户 `testplatform`，密码 `testplatform`（仅内网或按需开放）
-
 ## 常用命令
 
 ```bash
@@ -274,37 +282,9 @@ cd /home/carsome/QA/GmnTestPlatform
 - 若 Jenkins 与 Docker 不在同一台机器（如 Jenkins 在 Master、构建在 Agent），需在 **执行构建的节点** 上安装 Docker，且该节点的工作空间路径一致（或保证 `docker-compose.yml` 所在目录即代码检出目录）。
 - 若使用 **独立 Docker Compose 可执行文件**（如 `docker-compose` 命令），需在 Jenkinsfile 或节点环境中将 `DOCKER_COMPOSE_CMD` 改为实际命令（如 `docker-compose`），或在 Jenkins 中增加对应参数选项。
 
-## 使用已有 MySQL（不启动容器内 MySQL）
+## 外部 MySQL 建表
 
-若使用服务器上已有 MySQL，可不启动 compose 中的 `mysql` 服务：
-
-1. 在 MySQL 中创建数据库和用户：
-
-```sql
-CREATE DATABASE TestPlatform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'testplatform'@'%' IDENTIFIED BY '你的密码';
-GRANT ALL ON TestPlatform.* TO 'testplatform'@'%';
-FLUSH PRIVILEGES;
-```
-
-2. 执行项目中的建表脚本（按顺序）：  
-   `doc/sql/mybatis_schema.sql`、`migration_phase7_scenarios.sql`、`ui_test_schema.sql`、`migration_phase8.1_dashboard_nav.sql`、`migration_phase8_execution_history.sql`（均在 `doc/sql/` 目录下）。
-
-3. 修改 `docker-compose.yml`：注释或删除 `mysql` 服务；在 `backend` 的 `environment` 中设置：
-
-```yaml
-environment:
-  SPRING_PROFILES_ACTIVE: docker
-  SPRING_DATASOURCE_URL: jdbc:mysql://<MySQL主机>:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-  SPRING_DATASOURCE_USERNAME: testplatform
-  SPRING_DATASOURCE_PASSWORD: 你的密码
-```
-
-4. 启动时只起 backend 和 frontend：
-
-```bash
-sudo docker compose up -d backend frontend
-```
+若外部 MySQL 尚未建表，在 MySQL 中创建库、用户后，按顺序执行 `doc/sql/` 下脚本：`mybatis_schema.sql`、`migration_phase7_scenarios.sql`、`ui_test_schema.sql`、`migration_phase8.1_dashboard_nav.sql`、`migration_phase8_execution_history.sql`。
 
 ## 可选：插入测试数据
 
@@ -334,6 +314,6 @@ curl -s -X POST "http://localhost:4000/api/environments" \
 
 ## 安全建议
 
-- 生产环境务必修改 MySQL 的 `MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD` 以及后端的 `SPRING_DATASOURCE_PASSWORD`。
-- 避免将 3306、4000、5000 等端口对公网开放，必要时用 Nginx 做反向代理并配置 HTTPS。
+- 生产环境务必使用强密码并避免将 `.env` 提交到仓库；`SPRING_DATASOURCE_PASSWORD` 等敏感项建议用环境变量或密钥管理注入。
+- 避免将 4000、5000 等端口对公网开放，必要时用 Nginx 做反向代理并配置 HTTPS。
 - 敏感配置（如 Jasypt、Gemini API Key）通过环境变量或外部配置注入，不要写死在镜像中。

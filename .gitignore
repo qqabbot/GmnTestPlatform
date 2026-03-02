@@ -43,6 +43,9 @@ build/
 node_modules/
 dist/
 
+### Deployment (sensitive) ###
+.env
+
 ### Backend Generated ###
 testdb.db
 allure-results/

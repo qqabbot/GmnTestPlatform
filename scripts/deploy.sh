@@ -58,8 +58,8 @@ fi
 _log ">>> 构建完成"
 
 # ---------- 2. 启动/更新服务 ----------
-_log ">>> 启动服务 (docker compose up -d)"
-${DOCKER_COMPOSE_CMD} up -d
+_log ">>> 启动服务 (docker compose up -d，不拉取远程镜像)"
+${DOCKER_COMPOSE_CMD} up -d --no-pull
 _log ">>> 部署完成"
 _log ">>> 前端: http://<服务器IP>:5000  后端 API: http://<服务器IP>:4000/api"
 
