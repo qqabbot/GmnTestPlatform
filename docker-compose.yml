@@ -8,7 +8,10 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      # 数据源使用 application.yml 中已配置的 MySQL，此处不覆盖
+      # 显式传入数据源，避免被 .env 或宿主机空变量覆盖导致 url 未指定
+      SPRING_DATASOURCE_URL: jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: insp_dev
+      SPRING_DATASOURCE_PASSWORD: insp_dev@123
     ports:
       - "4000:4000"
     volumes:
