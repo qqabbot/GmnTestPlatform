@@ -224,6 +224,32 @@ sudo docker compose logs --tail=200 -f  # 最近 200 行并持续跟踪
 
 确保 `SPRING_DATASOURCE_URL` 为完整 JDBC 地址，例如：`jdbc:mysql://<MySQL主机>:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true`。
 
+### UI 测试执行模式
+
+- **服务器执行（Server Execution）**：在服务器上运行，**固定使用无头模式**（无图形界面），适合定时任务、CI 或无人值守场景。
+- **本地执行（Local Execution）**：在**使用者本机**运行，通过 [Playwright Local Agent](playwright-local-agent/README.md) 使用真实浏览器进行**执行、录制与回放**。
+
+**本机没有 Local Agent 时如何操作：**
+
+1. 本机安装 **Node.js 18+**（若未安装，请到 [nodejs.org](https://nodejs.org/) 下载）。
+2. 在**项目根目录**（与 `playwright-local-agent` 同级）打开终端，执行：
+   ```bash
+   cd playwright-local-agent && npm install && npx playwright install && npm start
+   ```
+3. 看到 Agent 监听 `127.0.0.1:9933` 后，在平台中选择「本地执行」并点击执行或录制即可。  
+   首次运行会下载 Chromium 等浏览器，可能需要几分钟。详细说明见 [playwright-local-agent/README.md](playwright-local-agent/README.md)。
+
+### UI 测试报错：Failed to create driver / 无法创建 driver
+
+该错误说明**当前运行的后端镜像里没有 Playwright 的浏览器环境**（或 Playwright 版本与镜像不一致）。本仓库的 backend 镜像已改为基于 [Playwright Java 官方镜像](https://playwright.dev/java/docs/docker) 构建，需**用最新代码重新构建并部署**：
+
+1. 在服务器上拉取最新 main：`git pull origin main`
+2. 重新构建后端镜像（不要用旧镜像）：  
+   `docker compose build backend --no-cache`
+3. 重新启动：`docker compose up -d`
+
+若仍报错，确认日志中 Playwright 版本与 `backend/pom.xml` 中一致（当前为 1.50.0），且 `docker-compose.yml` 中 backend 已配置 `ipc: host` 与 `init: true`。
+
 ---
 
 ## 📚 文档

@@ -69,17 +69,17 @@ public class UiTestRunner {
                         break;
                 }
 
-                log.info("LAUNCHING BROWSER: Type={}, Headless={}, Args={}", type, uiCase.getHeadless(),
+                // 服务器执行固定使用无头模式（无图形界面）
+                log.info("LAUNCHING BROWSER: Type={}, Headless=true (server mode), Args={}", type,
                         java.util.Arrays.asList("--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"));
 
-                // Added stability flags
                 Browser browser = browserType.launch(new BrowserType.LaunchOptions()
                         .setArgs(java.util.Arrays.asList(
                                 "--no-sandbox",
                                 "--disable-setuid-sandbox",
                                 "--disable-gpu",
                                 "--disable-dev-shm-usage"))
-                        .setHeadless(uiCase.getHeadless() != null ? uiCase.getHeadless() : true));
+                        .setHeadless(true));
 
                 BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                         .setViewportSize(uiCase.getViewportWidth(), uiCase.getViewportHeight())

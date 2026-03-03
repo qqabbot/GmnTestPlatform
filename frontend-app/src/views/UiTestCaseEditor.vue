@@ -52,15 +52,16 @@
                   <el-radio label="local">Local Execution</el-radio>
                 </el-radio-group>
                 <div style="margin-top: 5px; color: #909399; font-size: 12px;">
-                  <span v-if="executionMode === 'server'">Test runs on server (headless mode)</span>
-                  <span v-else>Test runs locally in your browser (requires Playwright installation)</span>
+                  <span v-if="executionMode === 'server'">在服务器上执行（无头模式，无界面）</span>
+                  <span v-else>在您本机使用浏览器执行、录制与回放（需先启动 Playwright Local Agent）</span>
                 </div>
               </el-form-item>
-              <el-form-item label="Browser Window" v-if="executionMode === 'server'">
+              <el-form-item label="Browser Window" v-if="executionMode === 'local'">
                 <el-radio-group v-model="uiCase.headless">
                   <el-radio :label="true">Headless (Background)</el-radio>
                   <el-radio :label="false">Headed (Visible Window)</el-radio>
                 </el-radio-group>
+                <div style="margin-top: 4px; color: #909399; font-size: 12px;">仅本地执行时生效：是否显示浏览器窗口</div>
               </el-form-item>
               <el-form-item label="Viewport Size">
                 <div style="display: flex; gap: 10px;">
@@ -604,31 +605,32 @@ const handleLocalExecute = async () => {
         const agentAvailable = await checkLocalAgent()
         
         if (!agentAvailable) {
-            // Agent 未运行，提示安装并给出安装脚本
-            const installScript = `cd playwright-local-agent
-npm install
-npm start`
-            
-            const installInstructions = `Local Playwright agent is not running.
+            // Agent 未运行，提示安装并给出完整步骤（含安装浏览器）
+            const installScript = `cd playwright-local-agent && npm install && npx playwright install && npm start`
+            const installInstructions = `本机尚未启动 Local Agent，无法在您电脑上打开浏览器执行/录制。
 
-To enable local execution, please install and start the agent:
+【操作步骤】
+1. 确保本机已安装 Node.js 18 或以上（未安装请先到 nodejs.org 下载）。
+2. 在项目根目录（包含 playwright-local-agent 的目录）打开终端，执行下面一条命令并保持终端运行：
 
 ${installScript}
 
-After starting the agent, click Execute again to run the test in your local browser.`
+3. 看到 Agent 监听 127.0.0.1:9933 后，回到本页面再次点击「执行」即可在本机浏览器中运行或录制。
+
+说明：首次运行会下载 Chromium 等浏览器，可能需要几分钟。`
             
             await ElMessageBox.alert(
                 installInstructions,
-                'Local Agent Required',
+                '需要先启动 Local Agent',
                 {
-                    confirmButtonText: 'Copy Install Script',
+                    confirmButtonText: '复制安装命令',
                     dangerouslyUseHTMLString: false
                 }
             ).then(() => {
                 navigator.clipboard.writeText(installScript).then(() => {
-                    ElMessage.success('Install script copied to clipboard')
+                    ElMessage.success('已复制到剪贴板，请到项目根目录终端中粘贴执行')
                 }).catch(() => {
-                    ElMessage.warning('Failed to copy. Please copy manually.')
+                    ElMessage.warning('复制失败，请手动复制上述命令')
                 })
             }).catch(() => {
                 // User cancelled
