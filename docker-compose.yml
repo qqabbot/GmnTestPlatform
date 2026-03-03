@@ -6,6 +6,9 @@ services:
     image: gmn-backend:latest
     container_name: gmn-backend
     restart: unless-stopped
+    # Playwright/Chromium in Docker: ipc=host 避免 Chromium 内存问题，init 避免僵尸进程
+    ipc: host
+    init: true
     # 强制使用 default profile（覆盖镜像内可能残留的 SPRING_PROFILES_ACTIVE=docker），只用 application.yml
     environment:
       SPRING_PROFILES_ACTIVE: "default"
