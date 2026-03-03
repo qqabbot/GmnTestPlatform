@@ -6,7 +6,9 @@ services:
     image: gmn-backend:latest
     container_name: gmn-backend
     restart: unless-stopped
-    # 不激活 docker profile，直接使用 application.yml 中的数据源与端口配置，避免 url 未指定
+    # 强制使用 default profile（覆盖镜像内可能残留的 SPRING_PROFILES_ACTIVE=docker），只用 application.yml
+    environment:
+      SPRING_PROFILES_ACTIVE: "default"
     ports:
       - "4000:4000"
     volumes:
