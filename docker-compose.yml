@@ -6,12 +6,7 @@ services:
     image: gmn-backend:latest
     container_name: gmn-backend
     restart: unless-stopped
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      # 必须用引号包裹，否则 YAML 会把 URL 中的 : 解析成键值分隔符，导致只传入 "jdbc"
-      SPRING_DATASOURCE_URL: "jdbc:mysql://10.48.0.13:3306/TestPlatform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
-      SPRING_DATASOURCE_USERNAME: "insp_dev"
-      SPRING_DATASOURCE_PASSWORD: "insp_dev@123"
+    # 不激活 docker profile，直接使用 application.yml 中的数据源与端口配置，避免 url 未指定
     ports:
       - "4000:4000"
     volumes:

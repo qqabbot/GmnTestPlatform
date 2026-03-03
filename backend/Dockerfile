@@ -28,6 +28,5 @@ USER appuser
 
 EXPOSE 4000
 
-# Use docker profile so application-docker.yml is loaded
-ENV SPRING_PROFILES_ACTIVE=docker
+# 不激活 profile，使用 jar 内 application.yml 的配置（含数据源、端口）
 ENTRYPOINT ["java", "-Xms256m", "-Xmx768m", "-XX:+UseG1GC", "-jar", "app.jar"]
