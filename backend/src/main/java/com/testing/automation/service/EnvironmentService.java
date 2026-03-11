@@ -36,6 +36,7 @@ public class EnvironmentService {
         Environment env = getEnvironmentById(id);
         if (env != null) {
             env.setEnvName(envDetails.getEnvName());
+            env.setCountry(envDetails.getCountry());
             env.setDescription(envDetails.getDescription());
             env.setDomain(envDetails.getDomain());
             env.setUpdatedAt(LocalDateTime.now());

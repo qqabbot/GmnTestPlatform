@@ -24,8 +24,18 @@
         >
           <div class="env-status" :style="{ backgroundColor: getEnvColor(env.envName) }"></div>
           <div class="env-info">
-            <div class="env-name">{{ env.envName }}</div>
-            <div class="env-domain">{{ env.domain || 'No domain' }}</div>
+           <div class="env-name-container" style="display: flex; align-items: center; gap: 8px;">
+             <span class="env-name">{{ env.envName }}</span>
+             <el-tag 
+               v-if="env.country" 
+               size="small" 
+               effect="plain" 
+               :type="env.country === 'MY' ? 'warning' : 'info'"
+             >
+               {{ env.country }}
+            </el-tag>
+           </div>
+           <div class="env-domain">{{ env.domain || 'No domain' }}</div>
           </div>
           <div class="env-actions">
             <el-dropdown trigger="click" @click.stop>
@@ -147,6 +157,13 @@
         <el-form-item label="Base URL / Domain">
           <el-input v-model="currentEnvForm.domain" placeholder="https://api.example.com" />
         </el-form-item>
+        <el-form-item label="Country" required>
+         <el-select v-select v-model="currentEnvForm.country" placeholder="select country">
+          <el-option label="MY" value="MY" />
+          <el-option label="ID" value="ID" />
+          <el-option label="TH" value="TH" />
+         </el-select>
+        </el-form-item>
         <el-form-item label="Description">
           <el-input v-model="currentEnvForm.description" type="textarea" :rows="3" />
         </el-form-item>
@@ -163,7 +180,7 @@
 
     <!-- Variable Dialog (Form add) -->
     <el-dialog v-model="showVarDialog" title="Add Variable" width="400px">
-      <el-form :model="newVar" label-position="top">
+        <el-form :model="newVar" label-position="top">
         <el-form-item label="Key" required>
           <el-input v-model="newVar.keyName" placeholder="API_KEY" />
         </el-form-item>
@@ -199,8 +216,8 @@ const jsonContent = ref('')
 const showEnvDialog = ref(false)
 const showVarDialog = ref(false)
 
-const newEnv = ref({ envName: '', domain: '', description: '' })
-const editEnv = ref({ id: null, envName: '', domain: '', description: '' })
+const newEnv = ref({ envName: '', domain: '', country: '', description: '' })
+const editEnv = ref({ id: null, envName: '', domain: '', country: '', description: '' })
 const newVar = ref({ keyName: '', valueContent: '' })
 
 // Inline editing refs
@@ -384,7 +401,7 @@ const deleteVariable = async (id) => {
 }
 
 const openAddDialog = () => {
-  editEnv.value = { id: null, envName: '', domain: '', description: '' }
+  editEnv.value = { id: null, envName: '', domain: '', country: '', description: '' }
   showEnvDialog.value = true
 }
 
@@ -473,6 +490,14 @@ onMounted(loadEnvironments)
   font-weight: 600;
   font-size: 14px;
   color: #2d3748;
+  margin-bottom: 2px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.env-name-container {
   margin-bottom: 2px;
 }
 

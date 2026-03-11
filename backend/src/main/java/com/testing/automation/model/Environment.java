@@ -7,9 +7,14 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 public class Environment {
-
     private Long id;
+
+    public Long getId() {
+        return this.id;
+    }
+
     private String envName;
+    private String country;
     private String description;
     private String domain;
     private LocalDateTime createdAt = LocalDateTime.now();
