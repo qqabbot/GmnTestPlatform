@@ -8,11 +8,6 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class Environment {
     private Long id;
-
-    public Long getId() {
-        return this.id;
-    }
-
     private String envName;
     private String country;
     private String description;

@@ -19,6 +19,14 @@
      
      <!-- Middle: Canvas -->
      <div class="pane middle-pane">
+        <div 
+          class="canvas-scroll-container" 
+          :style="{ 
+            height: '100%', 
+            overflow: 'auto', 
+            paddingBottom: consoleVisible ? '250px' : '0px' 
+          }"
+        >
         <scenario-canvas 
             :scenario-data="currentScenario" 
             v-model:steps="steps"
@@ -28,6 +36,7 @@
             @run="runScenario"
             @history="historyDialogVisible = true"
         />
+     </div>
      </div>
      
       <!-- Right: Properties & Variables -->
@@ -298,6 +307,10 @@ const updateStepStatus = (nodes, stepId, status) => {
     min-width: 400px;
     border-right: 1px solid #ebeef5;
     overflow: hidden;
+    position: relative;
+}
+.canvas-scroll-container {
+    transition: padding-bottom 0.2s ease; /* 增加平滑过渡效果 */
 }
 .right-pane {
     width: 450px;

@@ -22,7 +22,7 @@ public class GlobalVariableService {
 
     public GlobalVariable createVariable(GlobalVariable variable) {
         // Extract IDs from nested objects if present
-        if (variable.getEnvironment() != null && variable.getEnvironment().getId() != null) {
+        if (variable.getEnvironment() != null && ((com.testing.automation.model.Environment)variable.getEnvironment()).getId() != null) {
             variable.setEnvironmentId(variable.getEnvironment().getId());
         }
         if (variable.getProject() != null && variable.getProject().getId() != null) {
