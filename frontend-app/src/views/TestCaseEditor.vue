@@ -412,6 +412,7 @@ const selectedStepIndex = ref(-1)
 const activeTab = ref('settings')
 const isMounted = ref(true)
 const isUnmounted = ref(false)
+const isDirty = ref(false)
 const projects = ref([])
 const modules = ref([])
 // const environments = ref([]) // Removed
@@ -728,6 +729,13 @@ const stopWatch = watch(selectedStepIndex, (val) => {
   }
 })
 
+// 深度监听 Store 里的数据，只要改了 URL、Body 等，就变“脏”
+const stopStoreWatch = watch(() => store.currentCase, () => {
+  if (!isUnmounted.value) {
+    isDirty.value = true
+  }
+}, { deep: true })
+
 const loadData = async () => {
   try {
     const [projectsData, modulesData] = await Promise.all([
@@ -735,7 +743,7 @@ const loadData = async () => {
       testModuleApi.getAll()
     ])
     
-    // Check if component is still mounted before updating state
+    // 检查组件是否已卸载
     if (isUnmounted.value) return
     
     projects.value = projectsData
@@ -745,13 +753,12 @@ const loadData = async () => {
       try {
         await store.loadCase(route.params.id)
         
-        // Check again after async operation
         if (isUnmounted.value) return
-        // Set project/module IDs correctly - handle all possible data structures
+        
+        // --- 保持你原来的 Project/Module ID 修复逻辑 ---
         if (store.currentCase.module) {
           if (typeof store.currentCase.module === 'object') {
             store.currentCase.moduleId = store.currentCase.module.id
-            // Try to get project from module
             if (store.currentCase.module.project) {
               if (typeof store.currentCase.module.project === 'object') {
                 store.currentCase.projectId = store.currentCase.module.project.id
@@ -763,15 +770,15 @@ const loadData = async () => {
             store.currentCase.moduleId = store.currentCase.module
           }
         }
-        // If no project found, try to infer from moduleId
         if (!store.currentCase.projectId && store.currentCase.moduleId) {
           const module = modules.value.find(m => m.id === store.currentCase.moduleId)
           if (module && module.project) {
             store.currentCase.projectId = typeof module.project === 'object' ? module.project.id : module.project
           }
         }
+        // ------------------------------------------
+
       } catch (loadError) {
-        // Don't navigate if component is already unmounted
         if (isUnmounted.value) return
         console.error('Error loading test case:', loadError)
         ElMessage.error('Failed to load test case: ' + (loadError.message || 'Unknown error'))
@@ -779,9 +786,16 @@ const loadData = async () => {
       }
     } else {
       store.resetCase()
-      // Default to settings tab for new cases
       activeTab.value = 'settings'
     }
+
+    // 🔥 关键：数据全部加载并赋值完成后，重置拦截标记
+    // 使用 nextTick 确保数据渲染触发的 watch 已经执行完
+    await nextTick()
+    setTimeout(() => {
+      isDirty.value = false // 此时页面处于“干净”的初始状态
+    }, 500) // 延迟 500ms 避开 Monaco 编辑器等组件异步初始化引起的数据变化
+
   } catch (error) {
     console.error('Failed to load initial data:', error)
     ElMessage.error('Failed to load projects and modules')
@@ -789,9 +803,10 @@ const loadData = async () => {
 }
 
 const handleBack = () => {
-  router.back().catch(() => {
-    // Fallback to cases list if back navigation fails
-    router.push('/testing/cases').catch(() => {})
+  // 显式跳转回列表页，这会正常触发上面的 onBeforeRouteLeave 守卫
+  router.push('/testing/cases').catch(() => {
+    // 容错处理
+    window.location.href = '/testing/cases'
   })
 }
 
@@ -821,6 +836,10 @@ const handleUpdateStep = (index, updates) => {
 }
 
 const handleSave = async () => {
+  await store.saveCase()
+  ElMessage.success('Saved successfully')
+  
+  isDirty.value = false
   if (isUnmounted.value) return
   try {
     // Validate required fields
@@ -907,45 +926,38 @@ const executeRun = async () => {
 
 
 // Use route guard to close dialogs before navigation
-onBeforeRouteLeave((to, from, next) => {
-  // Only mark as unmounted if we are truly leaving the editor context
-  // (to prevent blocking actions when navigating between /new and /:id/edit)
+onBeforeRouteLeave(async (to, from, next) => {
   const isTransitioningInsideEditor = 
     (to.name === 'EditAPITestCase' || to.name === 'NewAPITestCase') &&
     (from.name === 'EditAPITestCase' || from.name === 'NewAPITestCase');
-    
+
+  if (isDirty.value && !isTransitioningInsideEditor) {
+    try {
+      await ElMessageBox.confirm(
+        '检测到未保存的更改，离开将丢失数据。确定离开吗？',
+        '提示',
+        { confirmButtonText: '离开', cancelButtonText: '留在当前页', type: 'warning' }
+      )
+      isDirty.value = false // 确认离开，清除标记
+    } catch {
+      return next(false) // 取消，留在原地
+    }
+  }
+
+  // 清理逻辑
   if (!isTransitioningInsideEditor) {
     isUnmounted.value = true
   }
-  
-  // Close all dialogs and drawers before navigation to prevent DOM access errors
-  const hasOpenDialogs = showCurlDialog.value || 
-      showAiDialog.value || showAiPreview.value || showLibraryDrawer.value || showResult.value
-  
-  if (hasOpenDialogs) {
-    // Close all dialogs synchronously
-    showCurlDialog.value = false
-    showAiDialog.value = false
-    showAiPreview.value = false
-    showLibraryDrawer.value = false
-    showResult.value = false
-  }
-  
-  // Use requestAnimationFrame to ensure all DOM updates and component cleanup
-  // operations complete before navigation.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      try {
-        next()
-      } catch (error) {
-        console.debug('Navigation retry:', error)
-        setTimeout(() => {
-          next()
-        }, 50)
-      }
-    })
-  })
+
+  // 同步关闭弹窗
+  showCurlDialog.value = false
+  showAiDialog.value = false
+  showAiPreview.value = false
+  showLibraryDrawer.value = false
+  showResult.value = false
+  next()
 })
+
 
 // Watch for route changes to handle component reuse (e.g., Save as New -> Edit)
 watch(() => route.params.id, (newId, oldId) => {

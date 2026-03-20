@@ -101,9 +101,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus' // 必须导入 ElMessageBox
 import { ArrowLeft } from '@element-plus/icons-vue'
 import ResourceLibrary from '../components/scenario/ResourceLibrary.vue'
 import ScenarioCanvas from '../components/scenario/ScenarioCanvas.vue'
@@ -121,10 +121,12 @@ const router = useRouter()
 const scenarioId = route.params.id
 const appStore = useAppStore()
 
-const handleBack = () => {
-  router.push('/testing/plans')
-}
 
+const environments = ref([]) // Removed
+// const showRunEnvDialog = ref(false) // Removed
+// const selectedRunEnv = ref('') // Removed
+
+const isDirty = ref(false)         // 标记是否有未保存的更改
 const currentScenario = ref({})
 const steps = ref([])
 const selectedStep = ref(null)
@@ -132,17 +134,11 @@ const executionResults = ref([])
 const resultDialogVisible = ref(false)
 const execConsole = ref(null)
 const consoleVisible = ref(false)
-
-const environments = ref([]) // Removed
-// const showRunEnvDialog = ref(false) // Removed
-// const selectedRunEnv = ref('') // Removed
-
 const rightActiveTab = ref('properties')
 const runtimeVariables = ref({})
 const historyDialogVisible = ref(false)
 const detailVisible = ref(false)
 const currentResult = ref(null)
-
 const viewResultDetail = (result) => {
     currentResult.value = result
     detailVisible.value = true
@@ -155,26 +151,75 @@ const selectedStepId = computed(() => {
 
 onMounted(async () => {
     if (scenarioId) {
+        window.onbeforeunload = () => isDirty.value ? true : undefined;
         loadScenario(scenarioId)
     }
 })
 
-// loadEnvironments removed
 
+const handleSelectStep = (step) => {
+    selectedStep.value = step
+}
+
+// --- 1. 核心监听器 ---
+// 监听步骤和基本信息的变化
+watch([steps, currentScenario], () => {
+  isDirty.value = true
+}, { deep: true })
+
+// --- 核心逻辑 2：路由守卫 (拦截左侧菜单或外部跳转) ---
+onBeforeRouteLeave(async (to, from, next) => {
+  if (isDirty.value) {
+    try {
+      await ElMessageBox.confirm(
+        '检测到未保存的更改，离开将丢失数据。确定离开吗？',
+        '提示',
+        { 
+          confirmButtonText: '离开', 
+          cancelButtonText: '留在当前页', 
+          type: 'warning' 
+        }
+      )
+      next() // 用户选择离开
+    } catch {
+      next(false) // 用户选择取消，留在原页
+    }
+  } else {
+    next()
+  }
+})
+
+// --- 核心逻辑 3：Back 按钮拦截 ---
+const handleBack = () => {
+  // Back 按钮手动触发路由跳转，同样会触发上面的 onBeforeRouteLeave
+  router.push('/testing/plans')
+}
+
+// --- 核心逻辑 4：加载与保存时重置标记 ---
 const loadScenario = async (id) => {
     try {
         const scenario = await testScenarioApi.getById(id)
         currentScenario.value = scenario
         const tree = await testScenarioApi.getStepsTree(id)
-        // Add tempIds for frontend keying if needed, though id is preferred if exists
         steps.value = tree || []
+        
+        // 关键：等待 DOM 和 Watcher 响应后，将 isDirty 重置为 false
+        await nextTick()
+        isDirty.value = false 
     } catch (e) {
         ElMessage.error('Failed to load scenario')
     }
 }
 
-const handleSelectStep = (step) => {
-    selectedStep.value = step
+const saveScenario = async () => {
+    try {
+        await testScenarioApi.syncSteps(scenarioId, steps.value)
+        ElMessage.success('Scenario saved successfully')
+        // 保存成功后重置标记
+        isDirty.value = false 
+    } catch (e) {
+        ElMessage.error('Failed to save scenario')
+    }
 }
 
 // Convert frontend tree to flat list for backend saving? 
@@ -192,15 +237,7 @@ const handleSelectStep = (step) => {
 // STARTUP FIX: I will add a `syncSteps` endpoint to backend controller in next step if needed, or iterate.
 // Iterating is slow. 
 // Let's assume for prototype we just log save.
-const saveScenario = async () => {
-    try {
-        await testScenarioApi.syncSteps(scenarioId, steps.value)
-        ElMessage.success('Scenario saved successfully')
-    } catch (e) {
-        console.error(e)
-        ElMessage.error('Failed to save scenario')
-    }
-}
+
 
 const runScenario = async () => {
     if (!appStore.selectedEnv) {
